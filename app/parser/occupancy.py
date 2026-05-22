@@ -36,6 +36,7 @@ def parse_occupancy_report(file_path: str) -> list[OccupancyRow]:
                 occupied_units=occ, total_units=total,
             ))
 
+    wb.close()
     return rows
 
 
@@ -54,7 +55,7 @@ def _find_header(all_cells) -> tuple:
                 col_map.setdefault("occupied", i)
             elif any(k in h for k in _TOTAL_KEYWORDS):
                 col_map.setdefault("total", i)
-        if all(k in col_map for k in ("property", "month", "occupied", "total")):
+        if all(k in col_map for k in ("property", "year", "month", "occupied", "total")):
             return idx, col_map
     return None, {}
 
