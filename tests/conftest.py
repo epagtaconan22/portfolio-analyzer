@@ -49,3 +49,16 @@ def actual_budget_workbook(tmp_path):
     path = tmp_path / "test_ab.xlsx"
     wb.save(str(path))
     return str(path)
+
+@pytest.fixture
+def occupancy_workbook(tmp_path):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Physical Occupancy"
+    ws.append(["Property", "Year", "Month", "Occupied Units", "Total Units"])
+    ws.append(["Sunrise Apts", 2024, 1, 90, 100])
+    ws.append(["Sunrise Apts", 2024, 2, 92, 100])
+    ws.append(["Oak Glen",     2024, 1, 45, 50])
+    path = tmp_path / "occupancy.xlsx"
+    wb.save(str(path))
+    return str(path)
