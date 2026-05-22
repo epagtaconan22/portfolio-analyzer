@@ -1,12 +1,15 @@
 import os
+from pathlib import Path
 from flask import Flask
 
+BASE_DIR = Path(__file__).parent.parent
+
 def create_app():
-    app = Flask(__name__, template_folder="templates", static_folder="../static")
+    app = Flask(__name__, template_folder="templates", static_folder=str(BASE_DIR / "static"))
     app.secret_key = "portfolio-analyzer-local"
 
-    os.makedirs("runs", exist_ok=True)
-    os.makedirs("uploads", exist_ok=True)
+    os.makedirs(BASE_DIR / "runs", exist_ok=True)
+    os.makedirs(BASE_DIR / "uploads", exist_ok=True)
 
     try:
         from app.routes.upload import bp as upload_bp
