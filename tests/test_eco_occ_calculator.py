@@ -67,3 +67,17 @@ def test_budget_eco_occ():
     kpis = [_base_kpi()]
     result = enrich_eco_occ(rows, kpis)
     assert result[0].budget_eco_occ_pct == pytest.approx(0.92)
+
+def test_eco_occ_variance():
+    rows = [
+        _mapped("Rental Income", "Income",       10000, source_type="Actual"),
+        _mapped("Vacancy",       "Contra-Income", 1000, source_type="Actual"),  # 90%
+        _mapped("Rental Income", "Income",       10000, source_type="Budget"),
+        _mapped("Vacancy",       "Contra-Income",  500, source_type="Budget"),  # 95%
+    ]
+    kpis = [_base_kpi()]
+    result = enrich_eco_occ(rows, kpis)
+    k = result[0]
+    assert k.eco_occ_pct == pytest.approx(0.90)
+    assert k.budget_eco_occ_pct == pytest.approx(0.95)
+    assert k.eco_occ_variance == pytest.approx(-0.05)

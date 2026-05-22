@@ -1,10 +1,8 @@
 """Enriches PropertyPeriodKPIs with economic occupancy data derived from financial statements."""
 
 from collections import defaultdict
-from typing import Optional
 from app.models import MappedRow, PropertyPeriodKPIs
 
-_ECO_OCC_CATS = {"Rental Income", "Vacancy", "Concessions", "Bad Debt"}
 
 def enrich_eco_occ(
     mapped_rows: list[MappedRow],
