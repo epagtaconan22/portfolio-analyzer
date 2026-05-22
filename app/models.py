@@ -31,7 +31,6 @@ class MappedRow:
     month: int
     amount: float
     original_amount: float
-    notes: str
     account_category: str   # "Rental Income" | "Other Income" | "Vacancy" |
                             # "Concessions" | "Bad Debt" | "Operating Expense" |
                             # "Excluded" | "Review Needed"
@@ -39,6 +38,7 @@ class MappedRow:
     include_in_noi: bool
     include_in_eco_occ: bool
     treatment: str          # "Income" | "Contra-Income" | "Expense" | "Excluded" | "Review Needed"
+    notes: str = ""
 
 @dataclass
 class OccupancyRow:

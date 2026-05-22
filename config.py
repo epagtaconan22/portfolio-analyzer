@@ -1,3 +1,4 @@
+"""Application defaults, KPI formula text, and account mapping rules (first match wins)."""
 # Default settings
 ECO_OCC_TARGET = 0.95
 
@@ -124,7 +125,9 @@ ACCOUNT_MAPPING_RULES = [
     ("utility",           "Operating Expense", "Expense", True, False),
     ("utilities",         "Operating Expense", "Expense", True, False),
     ("insurance",         "Operating Expense", "Expense", True, False),
-    ("tax",               "Operating Expense", "Expense", True, False),
+    ("property tax",      "Operating Expense", "Expense", True, False),
+    ("real estate tax",   "Operating Expense", "Expense", True, False),
+    ("income tax",        "Excluded",          "Excluded", False, False),
     ("compliance",        "Operating Expense", "Expense", True, False),
     ("marketing",         "Operating Expense", "Expense", True, False),
     ("advertising",       "Operating Expense", "Expense", True, False),
