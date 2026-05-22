@@ -21,14 +21,22 @@ def test_maps_vacancy():
     cat, treatment, in_noi, in_eco = map_account_name("Vacancy Loss")
     assert cat == "Vacancy"
     assert treatment == "Contra-Income"
+    assert in_noi is True
+    assert in_eco is True
 
 def test_maps_bad_debt():
-    cat, _, _, _ = map_account_name("Bad Debt Expense")
+    cat, treatment, in_noi, in_eco = map_account_name("Bad Debt Expense")
     assert cat == "Bad Debt"
+    assert treatment == "Contra-Income"
+    assert in_noi is True
+    assert in_eco is True
 
 def test_maps_concession():
-    cat, _, _, _ = map_account_name("Rent Concessions")
+    cat, treatment, in_noi, in_eco = map_account_name("Rent Concessions")
     assert cat == "Concessions"
+    assert treatment == "Contra-Income"
+    assert in_noi is True
+    assert in_eco is True
 
 def test_maps_operating_expense():
     cat, treatment, in_noi, _ = map_account_name("Management Fee")
@@ -62,3 +70,39 @@ def test_map_rows_returns_mapped_rows():
     assert mapped[0].account_category == "Rental Income"
     assert mapped[1].account_category == "Vacancy"
     assert len(entries) == 2
+
+def test_map_rows_kpi_mapping_field():
+    rows = [_make_raw("Gross Potential Rent")]
+    mapped, _ = map_rows(rows)
+    assert mapped[0].kpi_mapping == "GPR / Rental Income"
+
+def test_map_rows_deduplication():
+    # Same account in two months → one MappingEntry
+    r1 = RawRow(
+        property_name="P", pm_name="PM", source_workbook="w.xlsx",
+        source_sheet="S1", source_type="Actual", source_row=1,
+        account_code="5000", account_name="Gross Potential Rent",
+        year=2024, month=1, amount=10000, original_amount=10000,
+    )
+    r2 = RawRow(
+        property_name="P", pm_name="PM", source_workbook="w.xlsx",
+        source_sheet="S1", source_type="Actual", source_row=2,
+        account_code="5000", account_name="Gross Potential Rent",
+        year=2024, month=2, amount=10000, original_amount=10000,
+    )
+    mapped, entries = map_rows([r1, r2])
+    assert len(mapped) == 2
+    assert len(entries) == 1
+    assert entries[0].assigned_category == "Rental Income"
+    assert entries[0].include_in_noi is True
+    assert entries[0].include_in_eco_occ is True
+
+def test_misc_expense_maps_to_operating_expense():
+    cat, treatment, _, _ = map_account_name("Miscellaneous Expense")
+    assert cat == "Operating Expense"
+    assert treatment == "Expense"
+
+def test_security_deposit_maps_to_other_income():
+    cat, treatment, _, _ = map_account_name("Security Deposit Forfeiture")
+    assert cat == "Other Income"
+    assert treatment == "Income"

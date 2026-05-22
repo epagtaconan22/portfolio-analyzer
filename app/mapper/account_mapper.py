@@ -3,11 +3,14 @@
 from config import ACCOUNT_MAPPING_RULES
 from app.models import RawRow, MappedRow, MappingEntry
 
+# (category, treatment, include_in_noi, include_in_eco_occ)
+MappingTuple = tuple[str, str, bool, bool]
+
 
 def map_account_name(
     account_name: str,
-    custom_mapping: dict[str, tuple] | None = None,
-) -> tuple[str, str, bool, bool]:
+    custom_mapping: dict[str, MappingTuple] | None = None,
+) -> MappingTuple:
     """
     Returns (category, treatment, include_in_noi, include_in_eco_occ).
     custom_mapping keys are lowercase account names.
@@ -27,7 +30,7 @@ def map_account_name(
 
 def map_rows(
     raw_rows: list[RawRow],
-    custom_mapping: dict[str, tuple] | None = None,
+    custom_mapping: dict[str, MappingTuple] | None = None,
 ) -> tuple[list[MappedRow], list[MappingEntry]]:
     """
     Maps all RawRows to MappedRows. Also returns a deduplicated MappingEntry
