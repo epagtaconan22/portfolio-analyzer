@@ -11,7 +11,6 @@ def app():
 def client(app):
     return app.test_client()
 
-import io
 import openpyxl
 
 @pytest.fixture

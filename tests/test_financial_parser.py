@@ -1,4 +1,6 @@
 # tests/test_financial_parser.py
+import os
+
 import pytest
 from app.models import RawRow
 from app.parser.financial import parse_financial_workbooks
@@ -13,7 +15,6 @@ def test_parses_actual_workbook(simple_actual_workbook):
 def test_extracts_property_name_from_sheet(simple_actual_workbook):
     rows, _ = parse_financial_workbooks([simple_actual_workbook], {})
     props = {r.property_name for r in rows}
-    # Property name should be inferred from sheet name "Actual - Sunrise Apts"
     assert any("sunrise" in p.lower() or "apts" in p.lower() for p in props)
 
 def test_extracts_12_months(simple_actual_workbook):
@@ -41,14 +42,11 @@ def test_pm_name_assigned(simple_actual_workbook):
     rows, _ = parse_financial_workbooks(
         [simple_actual_workbook], {"test_actual.xlsx": "PM One"}
     )
-    import os
-    fname = os.path.basename(simple_actual_workbook)
     pm_rows = [r for r in rows if r.pm_name == "PM One"]
     assert len(pm_rows) > 0
 
 def test_total_row_excluded(simple_actual_workbook):
     rows, _ = parse_financial_workbooks([simple_actual_workbook], {})
     account_names = [r.account_name.lower() for r in rows]
-    # "Total" summary rows should be skipped
     assert not any(n.strip() in ("total", "total income", "total expenses", "net income")
                    for n in account_names)

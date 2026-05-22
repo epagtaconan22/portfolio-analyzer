@@ -1,24 +1,47 @@
 """Parses financial statement Excel workbooks into RawRow records."""
 
+import itertools
 import os
 import re
 from typing import Optional
 import openpyxl
 from app.models import RawRow, SourceIndexEntry
-from app.parser.sheet_inferrer import infer_sheet_type
+from app.parser.sheet_inferrer import (
+    infer_sheet_type,
+    _ACTUAL_BUDGET_PATTERNS,
+    _ACTUAL_PATTERNS,
+    _BUDGET_PATTERNS,
+)
 
+# Short 3-letter abbreviations are sufficient — substring matching means "jan" already
+# matches "january", "jun" matches "june", etc.  Long-form duplicates are not needed.
 _MONTH_PATTERNS = {
     "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
     "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
-    "january":1,"february":2,"march":3,"april":4,"june":6,"july":7,
-    "august":8,"september":9,"october":10,"november":11,"december":12,
 }
+
+# Compiled once for use in _find_header_row — avoids per-cell linear key scan.
+_MONTH_RE = re.compile(r'\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b')
+
+# Keywords to strip from sheet names when inferring a property name, built from the
+# same source as sheet_inferrer so the two modules stay in sync.
+_SHEET_NAME_STRIP_PATTERNS = _ACTUAL_BUDGET_PATTERNS + _ACTUAL_PATTERNS + _BUDGET_PATTERNS
+_SHEET_NAME_STRIP_RE = re.compile(
+    "|".join(re.escape(p) for p in sorted(_SHEET_NAME_STRIP_PATTERNS, key=len, reverse=True)),
+    flags=re.IGNORECASE,
+)
+
+# Account code pattern used by _extract_account.
+_ACCOUNT_CODE_RE = re.compile(r'^\d{3,6}$')
 
 _SKIP_ACCOUNT_PATTERNS = {
     "total", "subtotal", "net income", "net loss", "total income",
     "total revenue", "total expenses", "total cost", "total operating",
     "grand total", "net operating",
 }
+
+_YEAR_RE = re.compile(r'\b(20\d{2})\b')
+
 
 def parse_financial_workbooks(
     file_paths: list[str],
@@ -41,38 +64,60 @@ def parse_financial_workbooks(
     return all_rows, source_index
 
 
+def _make_index_entry(
+    source_workbook: str,
+    sheet_name: str,
+    pm_name: str,
+    *,
+    property_name: str = "",
+    year: int = 0,
+    source_type: str = "Unknown",
+    processed: bool = False,
+    rows_extracted: int = 0,
+    reason_if_excluded: str = "",
+) -> SourceIndexEntry:
+    """Single construction point for SourceIndexEntry to avoid copy-paste."""
+    return SourceIndexEntry(
+        source_workbook=source_workbook,
+        source_sheet=sheet_name,
+        property_name=property_name,
+        pm_name=pm_name,
+        year=year,
+        source_type=source_type,
+        processed=processed,
+        rows_extracted=rows_extracted,
+        reason_if_excluded=reason_if_excluded,
+    )
+
+
 def _parse_sheet(
     ws, sheet_name: str, source_workbook: str, pm_name: str
 ) -> tuple[list[RawRow], SourceIndexEntry]:
     all_cells = list(ws.iter_rows(values_only=True))
     if not all_cells:
-        return [], SourceIndexEntry(
-            source_workbook=source_workbook, source_sheet=sheet_name,
-            property_name="", pm_name=pm_name, year=0, source_type="Unknown",
-            processed=False, rows_extracted=0, reason_if_excluded="Empty sheet",
+        return [], _make_index_entry(
+            source_workbook, sheet_name, pm_name,
+            reason_if_excluded="Empty sheet",
         )
 
     title_rows = [list(r) for r in all_cells[:5]]
     header_row_idx, header_row = _find_header_row(all_cells)
     if header_row_idx is None:
-        return [], SourceIndexEntry(
-            source_workbook=source_workbook, source_sheet=sheet_name,
-            property_name="", pm_name=pm_name, year=0, source_type="Unknown",
-            processed=False, rows_extracted=0, reason_if_excluded="No month header row found",
+        return [], _make_index_entry(
+            source_workbook, sheet_name, pm_name,
+            reason_if_excluded="No month header row found",
         )
 
     header_strs = [str(c) if c is not None else "" for c in header_row]
     source_type = infer_sheet_type(sheet_name, header_strs, title_rows)
-    property_name = _infer_property_name(sheet_name, title_rows, source_type)
+    property_name = _infer_property_name(sheet_name, title_rows)
     year = _infer_year(sheet_name, title_rows, header_strs)
 
-    # Map column index → (month, stream) where stream = "Actual" or "Budget"
     col_map = _map_month_columns(header_strs, source_type)
     if not col_map:
-        return [], SourceIndexEntry(
-            source_workbook=source_workbook, source_sheet=sheet_name,
-            property_name=property_name, pm_name=pm_name, year=year,
-            source_type=source_type, processed=False, rows_extracted=0,
+        return [], _make_index_entry(
+            source_workbook, sheet_name, pm_name,
+            property_name=property_name, year=year, source_type=source_type,
             reason_if_excluded="No month columns identified",
         )
 
@@ -108,54 +153,63 @@ def _parse_sheet(
                 original_amount=amount,
             ))
 
-    return rows, SourceIndexEntry(
-        source_workbook=source_workbook, source_sheet=sheet_name,
-        property_name=property_name, pm_name=pm_name, year=year,
-        source_type=source_type, processed=True, rows_extracted=len(rows),
+    return rows, _make_index_entry(
+        source_workbook, sheet_name, pm_name,
+        property_name=property_name, year=year, source_type=source_type,
+        processed=True, rows_extracted=len(rows),
     )
 
 
 def _find_header_row(all_cells) -> tuple[Optional[int], Optional[tuple]]:
-    """Find the row index that contains month abbreviations (Jan/Feb/etc.)."""
+    """Return the first row (within the first 20) that contains 3+ month abbreviations."""
     for idx, row in enumerate(all_cells[:20]):
         row_strs = [str(c).lower() if c else "" for c in row]
-        month_hits = sum(1 for s in row_strs if any(m in s for m in _MONTH_PATTERNS))
+        month_hits = sum(1 for s in row_strs if _MONTH_RE.search(s))
         if month_hits >= 3:
             return idx, row
     return None, None
 
 
 def _map_month_columns(header_strs: list[str], source_type: str) -> dict[int, tuple[int, str]]:
-    """Returns {col_index: (month_int, 'Actual'|'Budget')}."""
+    """Return {col_index: (month_int, stream)} where stream is 'Actual' or 'Budget'.
+
+    For Actual+Budget sheets the stream is determined per-column by whether the header
+    contains a budget keyword; for pure-Budget sheets every month column is 'Budget';
+    for all other types every month column is 'Actual'.
+    """
+    # Resolve the stream-assignment strategy once, outside the column loop.
+    if source_type == "Actual+Budget":
+        def _stream(h_lower: str) -> str:
+            return "Budget" if ("bud" in h_lower) else "Actual"
+    elif source_type == "Budget":
+        def _stream(h_lower: str) -> str:  # noqa: F811
+            return "Budget"
+    else:
+        def _stream(h_lower: str) -> str:  # noqa: F811
+            return "Actual"
+
     col_map: dict[int, tuple[int, str]] = {}
     for idx, h in enumerate(header_strs):
         h_lower = h.lower().strip()
         month = _extract_month(h_lower)
-        if month is None:
-            continue
-        if source_type == "Actual+Budget":
-            stream = "Budget" if ("bud" in h_lower or "budget" in h_lower) else "Actual"
-        elif source_type == "Budget":
-            stream = "Budget"
-        else:
-            stream = "Actual"
-        col_map[idx] = (month, stream)
+        if month is not None:
+            col_map[idx] = (month, _stream(h_lower))
     return col_map
 
 
 def _extract_month(s: str) -> Optional[int]:
-    for abbr, num in _MONTH_PATTERNS.items():
-        if abbr in s:
-            return num
-    # Try MM/YYYY or MM-YYYY pattern
-    m = re.search(r'\b(0?[1-9]|1[0-2])[/\-](\d{4})\b', s)
+    m = _MONTH_RE.search(s)
     if m:
-        return int(m.group(1))
+        return _MONTH_PATTERNS[m.group()]
+    # Fall back to numeric MM/YYYY or MM-YYYY notation.
+    m2 = re.search(r'\b(0?[1-9]|1[0-2])[/\-](\d{4})\b', s)
+    if m2:
+        return int(m2.group(1))
     return None
 
 
 def _extract_account(row) -> tuple[str, str]:
-    """Returns (account_code, account_name) from first 1-3 cells of a data row."""
+    """Return (account_code, account_name) from the first 1-3 cells of a data row."""
     code = ""
     name = ""
     for cell in row[:3]:
@@ -164,12 +218,11 @@ def _extract_account(row) -> tuple[str, str]:
         val = str(cell).strip()
         if not val:
             continue
-        # If first non-empty cell looks like an account code (e.g. "5100"), save as code
-        if not name and re.match(r'^\d{3,6}$', val):
+        if not name and _ACCOUNT_CODE_RE.match(val):
             code = val
         elif not name:
             name = val
-        elif not code and re.match(r'^\d{3,6}$', val):
+        elif not code and _ACCOUNT_CODE_RE.match(val):
             code = val
         else:
             break
@@ -180,15 +233,12 @@ def _is_skip_row(account_name: str) -> bool:
     return account_name.lower().strip() in _SKIP_ACCOUNT_PATTERNS
 
 
-def _infer_property_name(sheet_name: str, title_rows: list, source_type: str) -> str:
-    """Extract property name from sheet name (after removing source type keywords)."""
-    name = sheet_name
-    for kw in ["actual vs budget", "actual/budget", "actual", "budget", "-", "–"]:
-        name = re.sub(re.escape(kw), " ", name, flags=re.IGNORECASE)
-    name = name.strip(" -–|")
+def _infer_property_name(sheet_name: str, title_rows: list) -> str:
+    """Extract property name from sheet name by removing source-type keywords."""
+    name = _SHEET_NAME_STRIP_RE.sub(" ", sheet_name).strip(" -–|").strip()
     if name:
         return name
-    # Fall back to first non-empty title row cell
+    # Fall back to first non-empty cell in the title area.
     for row in title_rows[:3]:
         for cell in row[:3]:
             if cell:
@@ -197,9 +247,10 @@ def _infer_property_name(sheet_name: str, title_rows: list, source_type: str) ->
 
 
 def _infer_year(sheet_name: str, title_rows: list, header_strs: list[str]) -> int:
-    """Extract year from sheet name, title, or column headers."""
-    for src in [sheet_name] + [str(c) for row in title_rows[:3] for c in row if c] + header_strs:
-        m = re.search(r'\b(20\d{2})\b', str(src))
+    """Extract the first four-digit year (20xx) from sheet name, title rows, or headers."""
+    title_cells = (str(c) for row in title_rows[:3] for c in row if c)
+    for src in itertools.chain([sheet_name], title_cells, header_strs):
+        m = _YEAR_RE.search(src)
         if m:
             return int(m.group(1))
     return 0
