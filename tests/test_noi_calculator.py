@@ -70,6 +70,7 @@ def test_multi_property_separate_kpis():
         _make_row("Rental Income", "Income", 8000, property_name="Prop B"),
     ]
     kpis = calculate_noi(rows)
+    assert len(kpis) == 2
     props = {k.property_name for k in kpis}
     assert "Prop A" in props and "Prop B" in props
 
@@ -84,6 +85,6 @@ def test_top_two_drivers_identified():
     ]
     kpis = calculate_noi(rows)
     k = next(x for x in kpis if x.month == 1)
-    # Gross Potential Rent: +1000 favorable; Management Fee: -2000 unfavorable; Payroll: +1000 favorable
-    assert k.top_noi_driver_1 != ""
+    # Management Fee: $-2000 unfavorable (largest); GPR: +$1000 and Payroll: +$1000 tied for second
+    assert "Management Fee" in k.top_noi_driver_1
     assert k.top_noi_driver_2 != ""

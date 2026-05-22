@@ -18,6 +18,10 @@ def calculate_noi(mapped_rows: list[MappedRow]) -> list[PropertyPeriodKPIs]:
     property/year/month combination present in mapped_rows.
     Actual and Budget rows are processed separately and merged.
     Sign convention: Income = positive, Expense = positive cost (subtracted), Contra-Income = positive deduction.
+
+    Pre-condition: rows with source_type="Actual+Budget" must be split into separate
+    Actual and Budget rows by the parser before calling this function. "Actual+Budget"
+    and "Unknown" source_type values are treated as Actual (budget track is lost).
     """
     Actual = "Actual"
     Budget = "Budget"
@@ -48,7 +52,8 @@ def calculate_noi(mapped_rows: list[MappedRow]) -> list[PropertyPeriodKPIs]:
             expense_acc[key] += amount
             account_acc[key + (row.account_name,)] -= amount  # negative = cost in driver analysis
 
-    # Collect all (property, pm, year, month) combos
+    # Collect all (property, pm, year, month) combos from income and expense accumulators.
+    # account_acc keys are a strict superset so they don't need to be included here.
     all_keys: set[tuple] = set()
     for (prop, pm, yr, mo, src) in list(income_acc.keys()) + list(expense_acc.keys()):
         all_keys.add((prop, pm, yr, mo))
