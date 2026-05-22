@@ -1,15 +1,16 @@
 """Infers source type (Actual / Budget / Actual+Budget / Unknown) from sheet metadata."""
 
 _ACTUAL_BUDGET_PATTERNS = ["actual vs budget", "actual/budget", "act vs bud", "act/bud"]
-_ACTUAL_PATTERNS = ["actual", "actuals", " act "]
-_BUDGET_PATTERNS = ["budget", "budgeted", " bud "]
+# Include leading-edge variants so "Act 2024" / "Bud Q1" sheet names match
+_ACTUAL_PATTERNS = ["actual", "actuals", " act ", "act "]
+_BUDGET_PATTERNS = ["budget", "budgeted", " bud ", "bud "]
 
 
 def infer_sheet_type(sheet_name: str, header_row: list[str], title_rows: list[list]) -> str:
     """
     Args:
         sheet_name: The worksheet tab name.
-        header_row: List of column header strings (lowercased by caller).
+        header_row: List of column header strings (any case; normalized internally).
         title_rows: First few rows of the sheet as lists of cell values.
     Returns:
         "Actual" | "Budget" | "Actual+Budget" | "Unknown"
@@ -27,9 +28,9 @@ def infer_sheet_type(sheet_name: str, header_row: list[str], title_rows: list[li
         if pat in name_lower:
             return "Actual"
 
-    # Check title rows (first 5 rows, first 3 cells each)
+    # Check title rows (first 5 rows, first 5 cells each — keywords can appear past col C)
     for row in title_rows[:5]:
-        for cell in row[:3]:
+        for cell in row[:5]:
             if not cell:
                 continue
             cell_lower = str(cell).lower()

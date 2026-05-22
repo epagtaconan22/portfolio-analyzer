@@ -30,3 +30,16 @@ def test_title_row_actual():
     # First non-empty cell in sheet often contains "Income Statement - Actual"
     title_rows = [["Income Statement - Actual YTD 2024"]]
     assert infer_sheet_type("Sheet1", [], title_rows) == "Actual"
+
+def test_actual_leading_edge_sheet_name():
+    # "Act 2024" — short-form tab with no leading space before "act"
+    assert infer_sheet_type("Act 2024", [], []) == "Actual"
+
+def test_budget_leading_edge_sheet_name():
+    # "Bud Q1" — short-form budget tab
+    assert infer_sheet_type("Bud Q1", [], []) == "Budget"
+
+def test_title_keyword_in_column_d():
+    # Keyword appearing in 4th cell (index 3) of title row — previously missed by row[:3] cap
+    title_rows = [["Property Name", "123 Main St", "2024", "Actual YTD"]]
+    assert infer_sheet_type("Sheet1", [], title_rows) == "Actual"
