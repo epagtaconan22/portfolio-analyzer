@@ -1,0 +1,209 @@
+/* Reset & base */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  color: #1a1a2e;
+  background: #f4f6f9;
+  line-height: 1.5;
+}
+
+/* Navigation */
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #1f4e79;
+  color: white;
+  padding: 0 24px;
+  height: 52px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+.nav-logo {
+  color: white;
+  font-weight: 700;
+  font-size: 16px;
+  text-decoration: none;
+  letter-spacing: 0.01em;
+}
+.nav-links a {
+  color: rgba(255,255,255,0.85);
+  text-decoration: none;
+  margin-left: 24px;
+  font-size: 13px;
+}
+.nav-links a:hover { color: white; }
+
+/* Container */
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+/* Page header */
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 16px;
+}
+.page-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1f4e79;
+  line-height: 1.2;
+}
+.subtitle {
+  color: #6b7280;
+  font-size: 13px;
+  margin-top: 4px;
+}
+.subtitle a { color: #1f4e79; text-decoration: none; }
+.subtitle a:hover { text-decoration: underline; }
+
+/* Cards */
+.card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  margin-bottom: 20px;
+}
+.card h2 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f4e79;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+/* Forms */
+.field { margin-bottom: 16px; }
+.field label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: #374151;
+}
+.field input[type="text"],
+.field input[type="number"],
+.field textarea,
+.field select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  background: white;
+}
+.field input[type="text"]:focus,
+.field input[type="number"]:focus,
+.field textarea:focus,
+.field select:focus {
+  outline: none;
+  border-color: #1f4e79;
+  box-shadow: 0 0 0 2px rgba(31,78,121,0.15);
+}
+.field input[type="file"] { font-size: 13px; padding: 4px 0; }
+.hint {
+  display: block;
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+.form-actions { text-align: right; margin-top: 8px; }
+
+/* Buttons */
+.btn-primary {
+  background: #1f4e79;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  white-space: nowrap;
+}
+.btn-primary:hover { background: #163d60; }
+.btn-small {
+  background: #e5e7eb;
+  color: #374151;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  margin-right: 4px;
+}
+.btn-small:hover { background: #d1d5db; }
+.btn-danger { background: #fee2e2; color: #dc2626; }
+.btn-danger:hover { background: #fecaca; }
+
+/* Table scroll wrapper */
+.table-scroll { overflow-x: auto; }
+
+/* Tables */
+.data-table,
+.kpi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.data-table th,
+.kpi-table th {
+  background: #1f4e79;
+  color: white;
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 600;
+  cursor: help;
+  position: sticky;
+  top: 0;
+}
+.data-table td,
+.kpi-table td {
+  padding: 7px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: middle;
+}
+.data-table tr:hover td,
+.kpi-table tr:hover td { background: #f9fafb; }
+.data-table a { color: #1f4e79; text-decoration: none; }
+.data-table a:hover { text-decoration: underline; }
+.row-fail td { background: #fef2f2 !important; }
+
+/* KPI formatting */
+.currency { text-align: right; font-variant-numeric: tabular-nums; }
+.pct      { text-align: right; font-variant-numeric: tabular-nums; }
+.pos { color: #059669; font-weight: 500; }
+.neg { color: #dc2626; font-weight: 500; }
+
+/* Commentary */
+.commentary {
+  line-height: 1.7;
+  color: #374151;
+  font-size: 13px;
+  max-width: 900px;
+}
+
+/* Flash messages */
+.flash-messages { margin-bottom: 16px; }
+.flash {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #92400e;
+}
