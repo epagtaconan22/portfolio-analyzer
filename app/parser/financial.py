@@ -1,5 +1,6 @@
 """Parses financial statement Excel workbooks into RawRow records."""
 
+import datetime as _dt
 import itertools
 import os
 import re
@@ -23,6 +24,13 @@ _MONTH_PATTERNS = {
 # Compiled once for use in _find_header_row — avoids per-cell linear key scan.
 _MONTH_RE = re.compile(r'\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b')
 
+# Matches MM/YYYY, MM-YYYY, YYYY/MM, YYYY-MM (numeric date column headers).
+_NUMERIC_MONTH_RE = re.compile(
+    r'\b(?:0?[1-9]|1[0-2])[/\-](?:20\d{2})\b'   # MM/YYYY or MM-YYYY
+    r'|'
+    r'\b(?:20\d{2})[/\-](?:0?[1-9]|1[0-2])\b'   # YYYY/MM or YYYY-MM
+)
+
 # Keywords to strip from sheet names when inferring a property name, built from the
 # same source as sheet_inferrer so the two modules stay in sync.
 _SHEET_NAME_STRIP_PATTERNS = _ACTUAL_BUDGET_PATTERNS + _ACTUAL_PATTERNS + _BUDGET_PATTERNS
@@ -31,8 +39,9 @@ _SHEET_NAME_STRIP_RE = re.compile(
     flags=re.IGNORECASE,
 )
 
-# Account code pattern used by _extract_account.
-_ACCOUNT_CODE_RE = re.compile(r'^\d{3,6}$')
+# Account code: starts with a digit, followed by 2+ digits or common separators.
+# Handles short codes ("500"), long Yardi codes ("5150000"), and dash/dot formats ("5000-01").
+_ACCOUNT_CODE_RE = re.compile(r'^\d[\d\-\.:/]{2,}$')
 
 _SKIP_ACCOUNT_PATTERNS = {
     "total", "subtotal", "net income", "net loss", "total income",
@@ -108,7 +117,7 @@ def _parse_sheet(
             reason_if_excluded="No month header row found",
         )
 
-    header_strs = [str(c) if c is not None else "" for c in header_row]
+    header_strs = [_cell_to_str(c) for c in header_row]
     source_type = infer_sheet_type(sheet_name, header_strs, title_rows)
     property_name = _infer_property_name(sheet_name, title_rows)
     year = _infer_year(sheet_name, title_rows, header_strs)
@@ -161,11 +170,23 @@ def _parse_sheet(
 
 
 def _find_header_row(all_cells) -> tuple[Optional[int], Optional[tuple]]:
-    """Return the first row (within the first 20) that contains 3+ month abbreviations."""
-    for idx, row in enumerate(all_cells[:20]):
-        row_strs = [str(c).lower() if c else "" for c in row]
-        month_hits = sum(1 for s in row_strs if _MONTH_RE.search(s))
-        if month_hits >= 3:
+    """Return the first row (within the first 30) that contains 3+ month indicators.
+
+    Handles text abbreviations ("Jan", "February"), numeric date headers ("1/2024",
+    "2024-01"), and Excel date values returned by openpyxl as datetime objects.
+    """
+    for idx, row in enumerate(all_cells[:30]):
+        hits = 0
+        for c in row:
+            if c is None:
+                continue
+            if isinstance(c, (_dt.date, _dt.datetime)):
+                hits += 1
+                continue
+            s = str(c).lower()
+            if _MONTH_RE.search(s) or _NUMERIC_MONTH_RE.search(s):
+                hits += 1
+        if hits >= 3:
             return idx, row
     return None, None
 
@@ -197,22 +218,39 @@ def _map_month_columns(header_strs: list[str], source_type: str) -> dict[int, tu
     return col_map
 
 
+def _cell_to_str(c) -> str:
+    """Convert a cell value to a string suitable for month/year detection.
+
+    datetime objects are formatted as "Jan 2024" so _MONTH_RE and _YEAR_RE
+    can match them without special-casing every downstream function.
+    """
+    if c is None:
+        return ""
+    if isinstance(c, (_dt.date, _dt.datetime)):
+        return c.strftime("%b %Y")   # e.g. "Jan 2024"
+    return str(c)
+
+
 def _extract_month(s: str) -> Optional[int]:
-    m = _MONTH_RE.search(s)
+    m = _MONTH_RE.search(s.lower())
     if m:
         return _MONTH_PATTERNS[m.group()]
-    # Fall back to numeric MM/YYYY or MM-YYYY notation.
-    m2 = re.search(r'\b(0?[1-9]|1[0-2])[/\-](\d{4})\b', s)
+    # MM/YYYY or MM-YYYY
+    m2 = re.search(r'\b(0?[1-9]|1[0-2])[/\-](20\d{2})\b', s)
     if m2:
         return int(m2.group(1))
+    # YYYY/MM or YYYY-MM
+    m3 = re.search(r'\b(20\d{2})[/\-](0?[1-9]|1[0-2])\b', s)
+    if m3:
+        return int(m3.group(2))
     return None
 
 
 def _extract_account(row) -> tuple[str, str]:
-    """Return (account_code, account_name) from the first 1-3 cells of a data row."""
+    """Return (account_code, account_name) from the first 1-4 cells of a data row."""
     code = ""
     name = ""
-    for cell in row[:3]:
+    for cell in row[:4]:
         if cell is None:
             continue
         val = str(cell).strip()
