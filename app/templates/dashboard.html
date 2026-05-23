@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}{{ portfolio_name }} Dashboard{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ portfolio_name }}</h1>
+    <p class="subtitle">{{ num_properties }} Properties &bull; {{ years | join(', ') }}</p>
+  </div>
+  <a href="{{ url_for('download.download', run_id=run_id) }}" class="btn-primary">
+    Download Workbooks (.zip)
+  </a>
+</div>
+
+<!-- Portfolio Summary -->
+<section class="card">
+  <h2>Portfolio Summary &mdash; {{ num_properties }} Properties</h2>
+  <div class="table-scroll">
+  <table class="kpi-table">
+    <thead>
+      <tr>
+        <th>Period</th>
+        <th title="Total Income = GPR + Other Income − Vacancy − Concessions − Bad Debt">Actual Income</th>
+        <th title="Budgeted Total Income">Budget Income</th>
+        <th title="Actual Income − Budget Income">Income Var</th>
+        <th title="Sum of all Operating Expense accounts">Actual Expenses</th>
+        <th title="Budgeted Operating Expenses">Budget Expenses</th>
+        <th title="NOI = Total Income − Total Expenses">Actual NOI</th>
+        <th title="Budget NOI = Budget Income − Budget Expenses">Budget NOI</th>
+        <th title="NOI Variance = Actual NOI − Budget NOI">NOI Var</th>
+        <th title="NOI Variance / |Budget NOI|">NOI Var %</th>
+        <th title="Net Collectible / GPR">Eco Occ %</th>
+        <th title="Occupied Units / Total Units">Phys Occ %</th>
+        <th title="Physical Occ % − Economic Occ %">Leakage Gap</th>
+        <th title="Actual Income / Total Units">Income/Unit</th>
+        <th title="Actual NOI / Total Units">NOI/Unit</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in summary_rows %}
+      <tr>
+        <td><strong>{{ r.year }}</strong></td>
+        <td class="currency">{{ r.actual_income | currency }}</td>
+        <td class="currency">{{ r.budget_income | currency }}</td>
+        <td class="currency {{ 'pos' if (r.income_variance or 0) >= 0 else 'neg' }}">{{ r.income_variance | currency }}</td>
+        <td class="currency">{{ r.actual_expenses | currency }}</td>
+        <td class="currency">{{ r.budget_expenses | currency }}</td>
+        <td class="currency">{{ r.actual_noi | currency }}</td>
+        <td class="currency">{{ r.budget_noi | currency }}</td>
+        <td class="currency {{ 'pos' if (r.noi_variance or 0) >= 0 else 'neg' }}">{{ r.noi_variance | currency }}</td>
+        <td class="pct {{ 'pos' if (r.noi_variance_pct or 0) >= 0 else 'neg' }}">{{ r.noi_variance_pct | pct }}</td>
+        <td class="pct">{{ r.eco_occ_pct | pct }}</td>
+        <td class="pct">{{ r.physical_occ_pct | pct }}</td>
+        <td class="pct {{ 'neg' if (r.leakage_gap or 0) > 0 else '' }}">{{ r.leakage_gap | pct }}</td>
+        <td class="currency">{{ r.income_per_unit | currency }}</td>
+        <td class="currency">{{ r.noi_per_unit | currency }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- Property Table -->
+<section class="card">
+  <h2>Properties &mdash; {{ num_properties }} in Analysis</h2>
+  <div class="table-scroll">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Property</th>
+        <th>PM</th>
+        <th title="Actual Income">Income</th>
+        <th title="Actual NOI = Income − Expenses">NOI</th>
+        <th title="NOI Variance = Actual − Budget">NOI Var</th>
+        <th title="Economic Occ % = Net Collectible / GPR">Eco Occ %</th>
+        <th title="Physical Occ % from occupancy report">Phys Occ %</th>
+        <th title="Physical Occ % − Economic Occ %">Leakage</th>
+        <th title="NOI / Total Units">NOI/Unit</th>
+        <th>Detail</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in prop_rows %}
+      <tr>
+        <td>{{ r.property_name }}</td>
+        <td>{{ r.pm_name }}</td>
+        <td class="currency">{{ r.actual_income | currency }}</td>
+        <td class="currency">{{ r.actual_noi | currency }}</td>
+        <td class="currency {{ 'pos' if (r.noi_variance or 0) >= 0 else 'neg' }}">{{ r.noi_variance | currency }}</td>
+        <td class="pct {% if r.eco_occ_pct is not none and r.eco_occ_pct < eco_occ_target %}neg{% endif %}">{{ r.eco_occ_pct | pct }}</td>
+        <td class="pct">{{ r.physical_occ_pct | pct }}</td>
+        <td class="pct {{ 'neg' if (r.leakage_gap or 0) > 0 else '' }}">{{ r.leakage_gap | pct }}</td>
+        <td class="currency">{{ r.noi_per_unit | currency }}</td>
+        <td><a href="{{ url_for('property_detail.show', run_id=run_id, property_name=r.property_name) }}">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- Quality Checks -->
+{% if quality_checks %}
+<section class="card">
+  <h2>Quality Checks</h2>
+  <table class="data-table">
+    <thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead>
+    <tbody>
+      {% for qc in quality_checks %}
+      <tr class="{{ 'row-fail' if not qc.passed else '' }}">
+        <td>{{ qc.check_name }}</td>
+        <td>{{ 'PASS' if qc.passed else 'FAIL' }}</td>
+        <td>{{ qc.detail }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

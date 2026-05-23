@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}New Analysis — Portfolio Analyzer{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>New Portfolio Analysis</h1>
+  <p class="subtitle">Upload financial statement workbooks to generate a KPI analysis.</p>
+</div>
+
+<form method="POST" enctype="multipart/form-data" action="/">
+  <section class="card">
+    <h2>Required Inputs</h2>
+    <div class="field">
+      <label for="portfolio_name">Portfolio Name</label>
+      <input type="text" id="portfolio_name" name="portfolio_name"
+             placeholder="e.g. Affirmed Housing 2024" required>
+    </div>
+    <div class="field">
+      <label for="financial_files">Financial Statement Workbooks (.xlsx)</label>
+      <input type="file" id="financial_files" name="financial_files"
+             multiple accept=".xlsx,.xls" required>
+      <span class="hint">One or more 12-month income statement workbooks. Actual, Budget, or Actual vs. Budget formats accepted.</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Physical Occupancy (Optional)</h2>
+    <div class="field">
+      <label for="occupancy_file">Physical Occupancy Report (.xlsx)</label>
+      <input type="file" id="occupancy_file" name="occupancy_file" accept=".xlsx,.xls">
+      <span class="hint">Required for Physical Occ %, Leakage Gap, and Per Unit calculations. Columns: Property, Year, Month, Occupied Units, Total Units.</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Analysis Settings</h2>
+    <div class="field">
+      <label for="pm_names">Property Manager Names (one per line, matches file order)</label>
+      <textarea id="pm_names" name="pm_names" rows="3"
+                placeholder="PM Company A&#10;PM Company B"></textarea>
+      <span class="hint">If blank, PM name is inferred from the filename.</span>
+    </div>
+    <div class="field">
+      <label for="eco_occ_target">Economic Occupancy Target (%)</label>
+      <input type="number" id="eco_occ_target" name="eco_occ_target"
+             value="{{ eco_occ_target }}" min="0" max="100" step="0.1">
+    </div>
+    <div class="field">
+      <label for="period_filter">Reporting Period</label>
+      <select id="period_filter" name="period_filter">
+        <option value="Full Year">Full Year</option>
+        <option value="Q1">Q1 (Jan–Mar)</option>
+        <option value="Q2">Q2 (Apr–Jun)</option>
+        <option value="Q3">Q3 (Jul–Sep)</option>
+        <option value="Q4">Q4 (Oct–Dec)</option>
+      </select>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Optional Settings</h2>
+    <div class="field">
+      <label for="excluded_properties">Excluded Properties (one per line)</label>
+      <textarea id="excluded_properties" name="excluded_properties" rows="3"></textarea>
+      <span class="hint">These properties are omitted entirely from the analysis.</span>
+    </div>
+    <div class="field">
+      <label for="carveout_properties">Carve-out Properties (one per line)</label>
+      <textarea id="carveout_properties" name="carveout_properties" rows="3"></textarea>
+      <span class="hint">Carve-out properties are shown in detail but excluded from portfolio totals.</span>
+    </div>
+    <div class="field">
+      <label for="custom_mapping">Custom Account Mapping (CSV)</label>
+      <input type="file" id="custom_mapping" name="custom_mapping" accept=".csv">
+      <span class="hint">CSV columns: account_name, assigned_category, treatment, include_in_noi, include_in_eco_occ</span>
+    </div>
+  </section>
+
+  <div class="form-actions">
+    <button type="submit" class="btn-primary">Run Analysis</button>
+  </div>
+</form>
+{% endblock %}

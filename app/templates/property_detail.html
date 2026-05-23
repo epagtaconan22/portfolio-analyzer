@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{{ property_name }} — Portfolio Analyzer{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ property_name }}</h1>
+    <p class="subtitle"><a href="{{ url_for('results.show', run_id=run_id) }}">&larr; Back to Dashboard</a></p>
+  </div>
+</div>
+
+<section class="card">
+  <h2>Monthly KPIs</h2>
+  <div class="table-scroll">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Year</th><th>Month</th>
+        <th title="Actual Income">Income</th>
+        <th title="Actual Expenses">Expenses</th>
+        <th title="Actual NOI">NOI</th>
+        <th title="NOI Variance = Actual − Budget">NOI Var</th>
+        <th title="Economic Occ % = Net Collectible / GPR">Eco Occ %</th>
+        <th title="Physical Occ % from occupancy report">Phys Occ %</th>
+        <th title="Physical Occ % − Economic Occ %">Leakage</th>
+        <th title="Income / Total Units">Income/Unit</th>
+        <th title="Expense / Total Units">Exp/Unit</th>
+        <th title="NOI / Total Units">NOI/Unit</th>
+        <th title="GPR / Rental Income">GPR</th>
+        <th>Vacancy</th>
+        <th>Concessions</th>
+        <th>Bad Debt</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for k in kpis | sort(attribute='month') %}
+      <tr>
+        <td>{{ k.year }}</td>
+        <td>{{ k.period }}</td>
+        <td class="currency">{{ k.actual_income | currency }}</td>
+        <td class="currency">{{ k.actual_expenses | currency }}</td>
+        <td class="currency">{{ k.actual_noi | currency }}</td>
+        <td class="currency {{ 'pos' if (k.noi_variance or 0) >= 0 else 'neg' }}">{{ k.noi_variance | currency }}</td>
+        <td class="pct">{{ k.eco_occ_pct | pct }}</td>
+        <td class="pct">{{ k.physical_occ_pct | pct }}</td>
+        <td class="pct {{ 'neg' if (k.leakage_gap or 0) > 0 else '' }}">{{ k.leakage_gap | pct }}</td>
+        <td class="currency">{{ k.income_per_unit | currency }}</td>
+        <td class="currency">{{ k.expense_per_unit | currency }}</td>
+        <td class="currency">{{ k.noi_per_unit | currency }}</td>
+        <td class="currency">{{ k.gpr | currency }}</td>
+        <td class="currency">{{ k.vacancy | currency }}</td>
+        <td class="currency">{{ k.concessions | currency }}</td>
+        <td class="currency">{{ k.bad_debt | currency }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

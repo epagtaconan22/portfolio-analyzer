@@ -23,4 +23,22 @@ def create_app():
     except ImportError:
         pass  # Routes not yet created
 
+    @app.template_filter("currency")
+    def currency_filter(value):
+        if value is None:
+            return "—"
+        try:
+            return f"${float(value):,.0f}"
+        except (TypeError, ValueError):
+            return "—"
+
+    @app.template_filter("pct")
+    def pct_filter(value):
+        if value is None:
+            return "—"
+        try:
+            return f"{float(value):.1%}"
+        except (TypeError, ValueError):
+            return "—"
+
     return app
