@@ -268,15 +268,47 @@ def _extract_account(row) -> tuple[str, str]:
 
 
 def _is_skip_row(account_name: str) -> bool:
-    return account_name.lower().strip() in _SKIP_ACCOUNT_PATTERNS
+    lower = account_name.lower().strip()
+    if lower in _SKIP_ACCOUNT_PATTERNS:
+        return True
+    # Skip Yardi-style subtotal rows whose names begin with "Total " or "Net "
+    # (e.g. "Total Rent Revenue", "Net Rental Revenue", "NET OPERATING INCOME (Loss)").
+    # Individual line-item accounts almost never start with these words.
+    if lower.startswith(("total ", "net ")):
+        return True
+    return False
+
+
+# Matches Yardi title-row pattern: "Property Name (short_code)" where the
+# parenthetical is 2–15 alphanumeric/hyphen/underscore characters.
+_YARDI_TITLE_RE = re.compile(r'^(.+?)\s*\([A-Za-z0-9_\-]{2,15}\)\s*$')
 
 
 def _infer_property_name(sheet_name: str, title_rows: list) -> str:
-    """Extract property name from sheet name by removing source-type keywords."""
+    """Extract property name, preferring the Yardi-style title row when present.
+
+    Yardi exports place a "Property Name (code)" string in the first cell of row 1
+    for every sheet.  Matching that pattern produces a clean, consistent name
+    regardless of whether the sheet is a Statement or Budget sheet.
+    """
+    # 1. Check the first two title rows for the Yardi "Name (code)" pattern.
+    for row in title_rows[:2]:
+        if not row:
+            continue
+        cell = row[0]
+        if not cell:
+            continue
+        val = str(cell).strip()
+        m = _YARDI_TITLE_RE.match(val)
+        if m:
+            return m.group(1).strip()
+
+    # 2. Fall back to sheet-name stripping (covers "Actual - Sunrise Apts" etc.).
     name = _SHEET_NAME_STRIP_RE.sub(" ", sheet_name).strip(" -–|").strip()
     if name:
         return name
-    # Fall back to first non-empty cell in the title area.
+
+    # 3. Last resort: first non-empty cell in the title area.
     for row in title_rows[:3]:
         for cell in row[:3]:
             if cell:

@@ -1,8 +1,9 @@
 """Infers source type (Actual / Budget / Actual+Budget / Unknown) from sheet metadata."""
 
 _ACTUAL_BUDGET_PATTERNS = ["actual vs budget", "actual/budget", "act vs bud", "act/bud"]
-# Include leading-edge variants so "Act 2024" / "Bud Q1" sheet names match
-_ACTUAL_PATTERNS = ["actual", "actuals", " act ", "act "]
+# Include leading-edge variants so "Act 2024" / "Bud Q1" sheet names match.
+# "statement" covers Yardi "12 Month Statement-{code}" sheet names.
+_ACTUAL_PATTERNS = ["actual", "actuals", " act ", "act ", "statement"]
 _BUDGET_PATTERNS = ["budget", "budgeted", " bud ", "bud "]
 
 
