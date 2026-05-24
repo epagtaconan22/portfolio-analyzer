@@ -133,7 +133,7 @@ def _parse_sheet(
     rows: list[RawRow] = []
     for row_idx, row in enumerate(all_cells[header_row_idx + 1:], start=header_row_idx + 2):
         account_code, account_name = _extract_account(row)
-        if not account_name or _is_skip_row(account_name):
+        if not account_name or _is_skip_row(account_name, account_code):
             continue
 
         for col_idx, (month, stream) in col_map.items():
@@ -267,7 +267,7 @@ def _extract_account(row) -> tuple[str, str]:
     return code, name
 
 
-def _is_skip_row(account_name: str) -> bool:
+def _is_skip_row(account_name: str, account_code: str = "") -> bool:
     lower = account_name.lower().strip()
     if lower in _SKIP_ACCOUNT_PATTERNS:
         return True
@@ -275,6 +275,10 @@ def _is_skip_row(account_name: str) -> bool:
     # (e.g. "Total Rent Revenue", "Net Rental Revenue", "NET OPERATING INCOME (Loss)").
     # Individual line-item accounts almost never start with these words.
     if lower.startswith(("total ", "net ")):
+        return True
+    # Yardi subtotal accounts: codes ending in -1798 are computed range subtotals
+    # (e.g. ConAm's "BASE SCHEDULED RENT" at 41000-1798 = sum of 41000-1000 + 41000-1100).
+    if account_code and account_code.endswith("-1798"):
         return True
     return False
 

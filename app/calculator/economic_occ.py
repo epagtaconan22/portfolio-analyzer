@@ -20,11 +20,12 @@ def enrich_eco_occ(
             continue
         src = row.source_type if row.source_type in ("Actual", "Budget") else "Actual"
         key = (row.property_name, row.pm_name, row.year, row.month, src, row.account_category)
-        # For Contra-Income, store the raw signed amount so that negative values
-        # (sign errors in source data) propagate correctly and produce eco_occ > 1.0,
-        # which Quality Checks can then flag. The formula gpr - v - c - b handles
-        # the subtraction; no abs() normalisation is applied here.
-        amount = row.amount
+        # Normalise sign: Contra-Income items (vacancy, concessions, bad debt) are
+        # always positive deductions regardless of source sign convention.
+        # Some PM companies (e.g. Solari) store them as positive; others (e.g. ConAm)
+        # store them as negative. abs() ensures gpr - v - c - b is always correct.
+        # Genuine data errors (vacancy > GPR) still surface as eco_occ < 0.
+        amount = abs(row.amount) if row.treatment == "Contra-Income" else row.amount
         acc[key] += amount
 
     for kpi in kpis:

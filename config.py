@@ -82,9 +82,25 @@ ACCOUNT_MAPPING_RULES = [
     ("capital",           "Excluded", "Excluded", False, False),
     ("distribution",      "Excluded", "Excluded", False, False),
     ("owner draw",        "Excluded", "Excluded", False, False),
+    # ConAm Yardi income netting entries (40000-series; always net to zero via Memo Contra)
+    ("market rent",       "Excluded", "Excluded", False, False),
+    ("loss/gain to lease","Excluded", "Excluded", False, False),
+    ("memo contra",       "Excluded", "Excluded", False, False),
+    # Capital expenditure abbreviation (catches "Cap Exp-..." and "Sal Cap Exp-...")
+    ("cap exp",           "Excluded", "Excluded", False, False),
+    # Abbreviated depreciation / interest (Yardi ConAm format)
+    ("depr exp",          "Excluded", "Excluded", False, False),
+    ("interest exp",      "Excluded", "Excluded", False, False),
+    # Partnership expenses (ConAm prefix "Prtnshp Exp-...")
+    ("prtnshp",           "Excluded", "Excluded", False, False),
+    # Financing fees excluded from NOI
+    ("fee exp-loan",      "Excluded", "Excluded", False, False),
+    ("remarketing",       "Excluded", "Excluded", False, False),
     # Vacancy / contra-income
     ("vacancy",           "Vacancy",  "Contra-Income", True, True),
     ("vacancies",         "Vacancy",  "Contra-Income", True, True),
+    # Employee unit occupancy (units held by staff at no/reduced rent)
+    ("employee unit",     "Vacancy",  "Contra-Income", True, True),
     # Concessions
     ("concession",        "Concessions", "Contra-Income", True, True),
     ("move-in special",   "Concessions", "Contra-Income", True, True),
@@ -103,6 +119,9 @@ ACCOUNT_MAPPING_RULES = [
     ("rental income",     "Rental Income", "Income", True, True),
     ("rent revenue",      "Rental Income", "Income", True, True),
     ("rent income",       "Rental Income", "Income", True, True),
+    # ConAm "Base Scheduled Rent" detail lines (41000-1000 tenant + 41000-1100 subsidy caught above)
+    # The 41000-1798 subtotal row is skipped via account-code detection in _is_skip_row.
+    ("base scheduled rent","Rental Income","Income", True, True),
     # Other Income
     ("laundry",           "Other Income", "Income", True, False),
     ("parking",           "Other Income", "Income", True, False),
@@ -117,6 +136,9 @@ ACCOUNT_MAPPING_RULES = [
     ("other income",      "Other Income", "Income", True, False),
     ("tenant charge",     "Other Income", "Income", True, False),
     ("fee income",        "Other Income", "Income", True, False),
+    # ConAm-specific Other Income
+    ("lease termination", "Other Income", "Income", True, False),
+    ("employee rent",     "Other Income", "Income", True, False),
     # Operating Expenses
     ("administrative",    "Operating Expense", "Expense", True, False),
     ("management fee",    "Operating Expense", "Expense", True, False),
@@ -124,18 +146,46 @@ ACCOUNT_MAPPING_RULES = [
     ("payroll",           "Operating Expense", "Expense", True, False),
     ("salary",            "Operating Expense", "Expense", True, False),
     ("wage",              "Operating Expense", "Expense", True, False),
+    # ConAm salary abbreviations ("Sal P/M-...", "Sal Maint-...", "Sal Burden-...", "Sal-...")
+    ("sal p/m",           "Operating Expense", "Expense", True, False),
+    ("sal maint",         "Operating Expense", "Expense", True, False),
+    ("sal burden",        "Operating Expense", "Expense", True, False),
+    ("sal-",              "Operating Expense", "Expense", True, False),
+    ("sal ",              "Operating Expense", "Expense", True, False),
+    # Personnel/HR costs (training, travel, employee relations)
+    ("personnel",         "Operating Expense", "Expense", True, False),
     ("repair",            "Operating Expense", "Expense", True, False),
     ("maintenance",       "Operating Expense", "Expense", True, False),
+    # Repair & Maintenance abbreviated ("R & M-General", "R & M-HVAC", etc.)
+    ("r & m",             "Operating Expense", "Expense", True, False),
     ("utility",           "Operating Expense", "Expense", True, False),
     ("utilities",         "Operating Expense", "Expense", True, False),
     ("insurance",         "Operating Expense", "Expense", True, False),
+    # Insurance abbreviated ("Ins - Property And Casualty", "Ins - General Liability")
+    ("ins - ",            "Operating Expense", "Expense", True, False),
     ("property tax",      "Operating Expense", "Expense", True, False),
     ("real estate tax",   "Operating Expense", "Expense", True, False),
     ("income tax",        "Excluded",          "Excluded", False, False),
+    # Property tax variants ("Taxes-Real Estate", "Taxes-Personal Property"; income tax excluded above)
+    ("taxes-",            "Operating Expense", "Expense", True, False),
     ("compliance",        "Operating Expense", "Expense", True, False),
     ("marketing",         "Operating Expense", "Expense", True, False),
     ("advertising",       "Operating Expense", "Expense", True, False),
+    # Advertising abbreviated ("Adv-Periodicals", "Adv-Apt Guide")
+    ("adv-",              "Operating Expense", "Expense", True, False),
+    # Marketing/promotion variants
+    ("promotion",         "Operating Expense", "Expense", True, False),
+    ("website",           "Operating Expense", "Expense", True, False),
+    ("lease up",          "Operating Expense", "Expense", True, False),
     ("contract service",  "Operating Expense", "Expense", True, False),
+    # Fee expenses — loan-related excluded above; catch all others here
+    ("fee exp-",          "Operating Expense", "Expense", True, False),
+    # Collection agency fees
+    ("collections",       "Operating Expense", "Expense", True, False),
+    # Resident activities
+    ("activit",           "Operating Expense", "Expense", True, False),
+    # Office duplicating/copying
+    ("duplicating",       "Operating Expense", "Expense", True, False),
     ("security deposit",  "Other Income",      "Income",  True, False),
     ("security service",  "Operating Expense", "Expense", True, False),
     ("security guard",    "Operating Expense", "Expense", True, False),
@@ -209,8 +259,10 @@ ACCOUNT_MAPPING_RULES = [
     ("admin free unit",   "Concessions", "Contra-Income", True, True),
     ("free unit",         "Concessions", "Contra-Income", True, True),
     ("model unit",        "Concessions", "Contra-Income", True, True),
+    ("non revenue unit",  "Concessions", "Contra-Income", True, True),
     # Interest income (non-operating, exclude from NOI)
     ("interest income",   "Excluded", "Excluded", False, False),
+    ("oth inc-interest",  "Excluded", "Excluded", False, False),
     ("interest repl",     "Excluded", "Excluded", False, False),
     ("interest from",     "Excluded", "Excluded", False, False),
     ("interest on bond",  "Excluded", "Excluded", False, False),
@@ -224,6 +276,10 @@ ACCOUNT_MAPPING_RULES = [
     ("ground lease",      "Excluded", "Excluded", False, False),
     ("gp administration", "Excluded", "Excluded", False, False),
     ("admin obligation",  "Excluded", "Excluded", False, False),
+    # ConAm-specific non-operating items
+    ("permanent loan",    "Excluded", "Excluded", False, False),
+    ("swap",              "Excluded", "Excluded", False, False),
+    ("grant revenue",     "Excluded", "Excluded", False, False),
     # Additional operating expenses common in Yardi/LIHTC
     ("uniform",           "Operating Expense", "Expense", True, False),
     ("drapery",           "Operating Expense", "Expense", True, False),
@@ -236,6 +292,17 @@ ACCOUNT_MAPPING_RULES = [
     ("recruitment",       "Operating Expense", "Expense", True, False),
     ("tenant service",    "Operating Expense", "Expense", True, False),
     ("resident program",  "Operating Expense", "Expense", True, False),
+    # Equipment expenses (ConAm: "Equip Exp-Copy Machine", "Equip Exp-Off Equip")
+    ("equip exp",         "Operating Expense", "Expense", True, False),
+    # Other misc expenses (ConAm: "Oth Exp-Supportive Services", "Oth Exp-Relocation")
+    ("oth exp",           "Operating Expense", "Expense", True, False),
+    # Insurance: MIP (Mortgage Insurance Premium — FHA/HUD loan operating cost)
+    ("ins exp",           "Operating Expense", "Expense", True, False),
+    # Events and decorations (resident community events)
+    ("events",            "Operating Expense", "Expense", True, False),
+    ("decorat",           "Operating Expense", "Expense", True, False),
+    # Tenant damage fee income
+    ("damage fee",        "Other Income", "Income", True, False),
     # NSF / late charges → Other Income
     ("nsf",               "Other Income", "Income", True, False),
     ("late charge",       "Other Income", "Income", True, False),
