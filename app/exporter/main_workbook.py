@@ -880,7 +880,8 @@ def _write_dashboard_ar_summary(ws, ar_rows: list, start_row: int,
         num_cols = 1 + len(col_seq)
         ws.cell(row, 1, "Metric")
         for ci, (ctype, yr, mo) in enumerate(col_seq, 2):
-            lbl = "YoY Δ" if ctype == "yoy" else _ar_period_label(yr, mo)
+            lbl = (f"YoY Δ {_ar_period_label(yr, mo)}" if ctype == "yoy"
+                   else _ar_period_label(yr, mo))
             ws.cell(row, ci, lbl)
         style_header_row(ws, row, num_cols)
         row += 1
@@ -1044,7 +1045,9 @@ def _build_ar_aging(wb, ar_rows: list, portfolio_name: str) -> None:
         hdr_row = row
         ws.cell(row, 1, "Metric")
         for ci, (ctype, yr, mo) in enumerate(col_seq, 2):
-            ws.cell(row, ci, "YoY Δ" if ctype == "yoy" else _ar_period_label(yr, mo))
+            lbl = (f"YoY Δ {_ar_period_label(yr, mo)}" if ctype == "yoy"
+                   else _ar_period_label(yr, mo))
+            ws.cell(row, ci, lbl)
         style_header_row(ws, row, num_cols)
         row += 1
         data_start = row
