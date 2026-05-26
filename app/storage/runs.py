@@ -10,9 +10,11 @@ from app.models import PropertyPeriodKPIs, SourceIndexEntry, MappingEntry, Quali
 
 RUNS_DIR = "runs"
 
+
 def new_run_id() -> str:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     return f"{ts}_{uuid.uuid4().hex[:6]}"
+
 
 def save_run(
     run_id: str,
@@ -21,6 +23,7 @@ def save_run(
     source_index: list[SourceIndexEntry],
     mapping_entries: list[MappingEntry],
     quality_checks: list[QualityCheck],
+    ar_rows: list | None = None,
 ) -> str:
     """Saves run data to runs/<run_id>/. Returns the run directory path."""
     run_dir = os.path.join(RUNS_DIR, run_id)
@@ -41,17 +44,31 @@ def save_run(
     with open(os.path.join(run_dir, "quality_checks.json"), "w") as f:
         json.dump([asdict(c) for c in quality_checks], f, indent=2, default=str)
 
+    if ar_rows:
+        with open(os.path.join(run_dir, "ar_aging.json"), "w") as f:
+            json.dump([asdict(r) for r in ar_rows], f, indent=2, default=str)
+
     return run_dir
 
 
 def load_run(run_id: str) -> dict:
-    """Returns a dict with keys: metadata, kpis, source_index, mapping_entries, quality_checks."""
+    """Returns a dict with keys: metadata, kpis, source_index, mapping_entries,
+    quality_checks, ar_aging (empty list if no AR data was uploaded)."""
     run_dir = os.path.join(RUNS_DIR, run_id)
     result = {}
     for key in ("metadata", "kpis", "source_index", "mapping_entries", "quality_checks"):
         path = os.path.join(run_dir, f"{key}.json")
         with open(path) as f:
             result[key] = json.load(f)
+
+    # AR aging is optional — older runs won't have this file
+    ar_path = os.path.join(run_dir, "ar_aging.json")
+    if os.path.isfile(ar_path):
+        with open(ar_path) as f:
+            result["ar_aging"] = json.load(f)
+    else:
+        result["ar_aging"] = []
+
     return result
 
 
