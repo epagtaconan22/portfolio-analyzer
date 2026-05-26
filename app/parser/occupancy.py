@@ -28,11 +28,25 @@ _MONTH_ABBRS = ["jan", "feb", "mar", "apr", "may", "jun",
 
 _YEAR_RE = re.compile(r'\b(20\d{2})\b')
 
-# Header cells that identify a "property name" column in the wide Yardi format
-_WIDE_NAME_HEADERS: frozenset[str] = frozenset({
-    "name", "property", "property name", "project", "project name",
-    "asset", "asset name", "prop", "building", "building name",
+# Header cells that identify a "property name" column in the wide Yardi format.
+# Split into two tiers so that an explicit "Name" column is always preferred over a
+# "Property" column (which in Yardi exports is typically the property *code*, not the
+# display name — e.g. 'f66', 'monte01').
+#
+# Detection logic: scan all header columns, record the best tier-1 match; fall back to
+# tier-2 only if no tier-1 match is found.
+_WIDE_NAME_HEADERS_PRIORITY: frozenset[str] = frozenset({
+    # These headers reliably contain the full display name
+    "name",
+    "property name", "project name", "asset name", "building name",
 })
+_WIDE_NAME_HEADERS_FALLBACK: frozenset[str] = frozenset({
+    # These headers *may* contain the display name, but in Yardi 12-Month Occupancy
+    # reports the "Property" column is a short code — only use as last resort
+    "property", "project", "asset", "prop", "building",
+})
+# Union for any caller that still wants a single set (e.g. tests, narrow-format helpers)
+_WIDE_NAME_HEADERS: frozenset[str] = _WIDE_NAME_HEADERS_PRIORITY | _WIDE_NAME_HEADERS_FALLBACK
 
 # Header cells that identify a "total units" column in the wide Yardi format
 _WIDE_UNITS_HEADERS: frozenset[str] = frozenset({
@@ -121,8 +135,14 @@ def _parse_wide_format(all_cells: list) -> Optional[list[OccupancyRow]]:
         return None
 
     # Map month integer -> column index; also locate Name and Units columns.
+    # Use two-tier name detection: prefer tier-1 ("Name", "Property Name", …) over
+    # tier-2 ("Property", "Prop", …).  In Yardi 12-Month Occupancy reports the
+    # "Property" column holds a short code (e.g. 'f66') while the "Name" column holds
+    # the actual display name.  Taking the first match without priority would silently
+    # return codes instead of names, breaking the downstream property-name join.
     month_cols: dict[int, int] = {}
-    name_col: Optional[int] = None
+    name_col_priority: Optional[int] = None   # tier-1: "name", "property name", …
+    name_col_fallback: Optional[int] = None   # tier-2: "property", "prop", …
     units_col: Optional[int] = None
 
     for col_idx, cell in enumerate(header_row):
@@ -131,10 +151,15 @@ def _parse_wide_format(all_cells: list) -> Optional[list[OccupancyRow]]:
         s = str(cell).lower().strip()
         if s in _MONTH_ABBRS:
             month_cols[_MONTH_ABBRS.index(s) + 1] = col_idx
-        elif name_col is None and s in _WIDE_NAME_HEADERS:
-            name_col = col_idx
+        elif name_col_priority is None and s in _WIDE_NAME_HEADERS_PRIORITY:
+            name_col_priority = col_idx
+        elif name_col_fallback is None and s in _WIDE_NAME_HEADERS_FALLBACK:
+            name_col_fallback = col_idx
         elif units_col is None and s in _WIDE_UNITS_HEADERS:
             units_col = col_idx
+
+    # Resolve name column: prefer tier-1 match, fall back to tier-2
+    name_col: Optional[int] = name_col_priority if name_col_priority is not None else name_col_fallback
 
     # Need both a name column and a units column to proceed.
     if name_col is None or units_col is None:
