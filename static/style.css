@@ -350,3 +350,181 @@ body {
 .kpi-group-header td.neg {
   color: inherit;
 }
+
+/* ── Table Sort / Filter Engine ─────────────────────────────────────────── */
+
+/* Filterable column header */
+.sf-th {
+  cursor: pointer !important;
+  padding-right: 26px !important;
+  position: relative;
+  user-select: none;
+}
+.sf-th:hover {
+  background: #2563eb !important;
+}
+
+/* Sort/filter icon span (injected by JS) */
+.sf-icon {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 9px;
+  color: rgba(255,255,255,0.35);
+  pointer-events: none;
+  line-height: 1;
+  letter-spacing: -1px;
+  transition: color 0.15s;
+}
+.sf-th:hover .sf-icon { color: rgba(255,255,255,0.85); }
+
+/* Active sort — brighter blue header + visible arrow */
+.sf-th.sf-sorted-asc,
+.sf-th.sf-sorted-desc {
+  background: #2563eb !important;
+}
+.sf-th.sf-sorted-asc .sf-icon,
+.sf-th.sf-sorted-desc .sf-icon {
+  color: #ffffff;
+  font-size: 10px;
+}
+
+/* Active filter — inset amber bottom stripe so it's unmissable */
+.sf-th.sf-filtered {
+  background: #1a5f9c !important;
+  box-shadow: inset 0 -3px 0 0 #f59e0b !important;
+}
+.sf-th.sf-filtered .sf-icon { color: #fbbf24; }
+
+/* Active sort + filter — both signals */
+.sf-th.sf-sorted-asc.sf-filtered,
+.sf-th.sf-sorted-desc.sf-filtered {
+  background: #1a5f9c !important;
+  box-shadow: inset 0 -3px 0 0 #f59e0b !important;
+}
+
+/* Status bar injected above the table when filters/sort are active */
+.sf-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  padding: 5px 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #92400e;
+}
+.sf-status-text { flex: 1; font-style: italic; }
+.sf-status-clear-all {
+  background: none;
+  border: none;
+  color: #1f4e79;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  text-decoration: underline;
+}
+.sf-status-clear-all:hover { color: #163d60; }
+
+/* Floating sort/filter panel */
+.sf-panel {
+  position: fixed;
+  z-index: 9900;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.14), 0 2px 6px rgba(0,0,0,0.06);
+  min-width: 215px;
+  padding: 6px;
+  font-size: 13px;
+  color: #374151;
+  display: none;
+}
+.sf-panel-col-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 8px 7px;
+  border-bottom: 1px solid #f3f4f6;
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+.sf-panel-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 7px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #374151;
+  font-family: inherit;
+}
+.sf-panel-btn:hover { background: #f9fafb; }
+.sf-panel-btn.sf-active { background: #eff6ff; color: #1d4ed8; font-weight: 600; }
+.sf-panel-icon { width: 18px; text-align: center; color: #9ca3af; flex-shrink: 0; }
+.sf-panel-btn.sf-active .sf-panel-icon { color: #1d4ed8; }
+
+.sf-panel-sep { height: 1px; background: #f3f4f6; margin: 5px 2px; }
+
+.sf-filter-label { font-size: 11px; color: #9ca3af; padding: 4px 10px 3px; }
+.sf-filter-row { display: flex; gap: 4px; padding: 0 6px 6px; }
+.sf-filter-input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  font-size: 12px;
+  font-family: inherit;
+  min-width: 0;
+}
+.sf-filter-input:focus {
+  outline: none;
+  border-color: #1f4e79;
+  box-shadow: 0 0 0 2px rgba(31,78,121,0.12);
+}
+.sf-filter-x {
+  flex-shrink: 0;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  padding: 6px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  color: #9ca3af;
+  font-family: inherit;
+  line-height: 1;
+}
+.sf-filter-x:hover { background: #e5e7eb; color: #374151; }
+
+.sf-panel-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 3px 8px 2px;
+  border-top: 1px solid #f3f4f6;
+  margin-top: 2px;
+}
+.sf-clear-col-btn {
+  background: none;
+  border: none;
+  color: #dc2626;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 2px;
+  font-family: inherit;
+}
+.sf-clear-col-btn:hover { text-decoration: underline; }
