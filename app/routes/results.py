@@ -251,8 +251,9 @@ def show(run_id):
     kpis   = data["kpis"]
     checks = data["quality_checks"]
 
-    portfolio_name = meta.get("portfolio_name", "Portfolio")
-    eco_occ_target = meta.get("eco_occ_target", ECO_OCC_TARGET)
+    portfolio_name     = meta.get("portfolio_name", "Portfolio")
+    eco_occ_target     = meta.get("eco_occ_target", ECO_OCC_TARGET)
+    use_budget_eco_occ = meta.get("use_budget_eco_occ", False)
     years  = meta.get("years", [])
     props  = meta.get("properties", [])
 
@@ -313,6 +314,14 @@ def show(run_id):
             agg["pm_name"] = prop_kpis[0].get("pm_name", "")
             agg["top_noi_driver_1"] = prop_kpis[0].get("top_noi_driver_1", "")
             agg["top_noi_driver_2"] = prop_kpis[0].get("top_noi_driver_2", "")
+            # Determine whether this property is below its eco occ target
+            eco = agg.get("eco_occ_pct")
+            if eco is None:
+                agg["is_below_eco_target"] = False
+            elif use_budget_eco_occ and agg.get("budget_eco_occ_pct") is not None:
+                agg["is_below_eco_target"] = eco < agg["budget_eco_occ_pct"]
+            else:
+                agg["is_below_eco_target"] = eco < eco_occ_target
             prop_rows.append(agg)
 
     # ── AR Aging section ───────────────────────────────────────────────────────
@@ -407,6 +416,7 @@ def show(run_id):
         quality_checks=checks,
         portfolio_name=portfolio_name,
         eco_occ_target=eco_occ_target,
+        use_budget_eco_occ=use_budget_eco_occ,
         latest_period_label=latest_period_label,
         years=years,
         properties=props,

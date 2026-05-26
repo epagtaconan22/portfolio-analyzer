@@ -100,7 +100,7 @@
         <td class="currency">{{ r.actual_noi | currency }}</td>
         <td class="currency">{{ r.noi_per_unit | currency }}</td>
         <td class="currency {{ 'pos' if (r.noi_variance or 0) >= 0 else 'neg' }}">{{ r.noi_variance | currency }}</td>
-        <td class="pct {% if r.eco_occ_pct is not none and r.eco_occ_pct < eco_occ_target %}neg{% endif %}">{{ r.eco_occ_pct | pct }}</td>
+        <td class="pct {% if r.is_below_eco_target %}neg{% endif %}">{{ r.eco_occ_pct | pct }}</td>
         <td class="pct">{{ r.physical_occ_pct | pct }}</td>
         <td class="pct {{ 'neg' if (r.leakage_gap or 0) > 0 else '' }}">{{ r.leakage_gap | pct }}</td>
         <td><a href="{{ url_for('property_detail.show', run_id=run_id, property_name=r.property_name) }}">View</a></td>

@@ -97,12 +97,14 @@ def build_main_workbook(
     output_path: str,
     eco_occ_target: float = ECO_OCC_TARGET,
     ar_rows: list | None = None,
+    use_budget_eco_occ: bool = False,
 ) -> str:
     """Builds main workbook at output_path. Returns path."""
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
 
-    _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=ar_rows)
+    _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=ar_rows,
+                     use_budget_eco_occ=use_budget_eco_occ)
     _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target)
     _build_monthly_kpis(wb, kpis)
     _build_ar_aging(wb, ar_rows or [], portfolio_name)
@@ -113,7 +115,8 @@ def build_main_workbook(
 
 # ─── Dashboard ────────────────────────────────────────────────────────────────
 
-def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None):
+def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
+                     use_budget_eco_occ=False):
     ws = wb.create_sheet("Dashboard")
 
     from openpyxl.worksheet.properties import Outline
@@ -221,9 +224,14 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None):
     row += 2
 
     # ── Properties Below Eco Occ Target ─────────────────────────────────────
-    ws.cell(row, 1, f"Properties Below Economic Occupancy Target ({eco_occ_target:.0%})").font = BOLD_FONT
+    if use_budget_eco_occ:
+        section_title = "Properties Below Budgeted Economic Occupancy"
+    else:
+        section_title = f"Properties Below Economic Occupancy Target ({eco_occ_target:.0%})"
+    ws.cell(row, 1, section_title).font = BOLD_FONT
     row += 1
-    _write_below_target_table(ws, kpis, row, eco_occ_target)
+    _write_below_target_table(ws, kpis, row, eco_occ_target,
+                              use_budget_eco_occ=use_budget_eco_occ)
 
     # ── Column widths ────────────────────────────────────────────────────────
     ws.column_dimensions["A"].width = 28
@@ -521,7 +529,8 @@ def _eco_occ_drivers(agg: dict) -> tuple[str, str]:
     return d1, d2
 
 
-def _write_below_target_table(ws, kpis, start_row, eco_occ_target):
+def _write_below_target_table(ws, kpis, start_row, eco_occ_target,
+                              use_budget_eco_occ=False):
     quarters = _get_sorted_quarters(kpis)
     if not quarters:
         ws.cell(start_row + 1, 1, "No data available.")
@@ -539,31 +548,44 @@ def _write_below_target_table(ws, kpis, start_row, eco_occ_target):
     for prop, pklist in prop_groups.items():
         agg = _aggregate(pklist)
         pm = pklist[0].pm_name
-        if agg.get("eco_occ_pct") is not None and agg["eco_occ_pct"] < eco_occ_target:
-            below.append((agg["eco_occ_pct"], prop, pm, agg))
+        eco_occ = agg.get("eco_occ_pct")
+        if eco_occ is None:
+            continue
+        bud = agg.get("budget_eco_occ_pct")
+        effective_target = (bud if (use_budget_eco_occ and bud is not None)
+                            else eco_occ_target)
+        if eco_occ < effective_target:
+            below.append((eco_occ, prop, pm, agg, effective_target))
 
     below.sort(key=lambda x: x[0])  # worst first
 
-    headers = ["Property", "PM", "Eco Occ %", "Target", "Variance to Target",
-               "Driver 1", "Driver 2"]
+    if use_budget_eco_occ:
+        headers = ["Property", "PM", "Eco Occ %", "Budget Eco Occ %",
+                   "Variance to Budget", "Driver 1", "Driver 2"]
+    else:
+        headers = ["Property", "PM", "Eco Occ %", "Target", "Variance to Target",
+                   "Driver 1", "Driver 2"]
     for col, h in enumerate(headers, 1):
         ws.cell(start_row, col, h)
     style_header_row(ws, start_row, len(headers), fill=SUBHDR_FILL, font=SUBHEADER_FONT)
     row = start_row + 1
 
-    for eco_occ, prop, pm, agg in below:
+    for eco_occ, prop, pm, agg, effective_target in below:
         d1, d2 = _eco_occ_drivers(agg)
         ws.cell(row, 1, prop)
         ws.cell(row, 2, pm)
         _c(ws, row, 3, eco_occ, PCT_FMT)
-        _c(ws, row, 4, eco_occ_target, PCT_FMT)
-        _c(ws, row, 5, eco_occ - eco_occ_target, PCT_FMT)
+        _c(ws, row, 4, effective_target, PCT_FMT)
+        _c(ws, row, 5, eco_occ - effective_target, PCT_FMT)
         ws.cell(row, 6, d1)
         ws.cell(row, 7, d2)
         row += 1
 
     if row == start_row + 1:
-        ws.cell(row, 1, f"All properties at or above {eco_occ_target:.0%} target")
+        if use_budget_eco_occ:
+            ws.cell(row, 1, "All properties at or above their budgeted economic occupancy")
+        else:
+            ws.cell(row, 1, f"All properties at or above {eco_occ_target:.0%} target")
         row += 1
     return row
 

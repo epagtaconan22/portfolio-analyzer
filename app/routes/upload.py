@@ -30,8 +30,9 @@ def index():
 @bp.route("/", methods=["POST"])
 def run_analysis():
     portfolio_name = request.form.get("portfolio_name", "Portfolio").strip() or "Portfolio"
-    eco_occ_target = float(request.form.get("eco_occ_target", ECO_OCC_TARGET * 100)) / 100
-    pm_names_raw   = request.form.get("pm_names", "").strip()
+    eco_occ_target      = float(request.form.get("eco_occ_target", ECO_OCC_TARGET * 100)) / 100
+    use_budget_eco_occ  = request.form.get("use_budget_eco_occ") == "1"
+    pm_names_raw        = request.form.get("pm_names", "").strip()
     excluded_raw   = request.form.get("excluded_properties", "").strip()
     carveout_raw   = request.form.get("carveout_properties", "").strip()
 
@@ -138,7 +139,10 @@ def run_analysis():
 
     for k in kpis:
         if k.eco_occ_pct is not None:
-            k.is_below_eco_occ_target = k.eco_occ_pct < eco_occ_target
+            if use_budget_eco_occ and k.budget_eco_occ_pct is not None:
+                k.is_below_eco_occ_target = k.eco_occ_pct < k.budget_eco_occ_pct
+            else:
+                k.is_below_eco_occ_target = k.eco_occ_pct < eco_occ_target
 
     # ── Build workbooks ───────────────────────────────────────────────────────
     run_id  = new_run_id()
@@ -150,7 +154,8 @@ def run_analysis():
     backup_path = os.path.join(run_dir, f"{safe_name} Property Analysis backup.xlsx")
 
     build_main_workbook(kpis, portfolio_name, main_path, eco_occ_target,
-                        ar_rows=ar_rows if ar_rows else None)
+                        ar_rows=ar_rows if ar_rows else None,
+                        use_budget_eco_occ=use_budget_eco_occ)
     build_backup_workbook(mapped_rows, kpis, source_index, mapping_entries, [],
                           backup_path, eco_occ_target,
                           ar_rows=ar_rows if ar_rows else None)
@@ -170,6 +175,7 @@ def run_analysis():
         "created_at": datetime.now().isoformat(),
         "portfolio_name": portfolio_name,
         "eco_occ_target": eco_occ_target,
+        "use_budget_eco_occ": use_budget_eco_occ,
         "years": years,
         "properties": props,
         "num_properties": len(props),

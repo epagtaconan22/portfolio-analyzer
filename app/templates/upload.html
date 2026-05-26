@@ -78,6 +78,17 @@
       <label for="eco_occ_target">Economic Occupancy Target (%)</label>
       <input type="number" id="eco_occ_target" name="eco_occ_target"
              value="{{ eco_occ_target }}" min="0" max="100" step="0.1">
+      <div class="check-field">
+        <input type="checkbox" id="use_budget_eco_occ" name="use_budget_eco_occ" value="1">
+        <label class="check-label" for="use_budget_eco_occ">
+          Compare against each property's budgeted economic occupancy (when available)
+        </label>
+      </div>
+      <span class="hint" id="eco-occ-hint">
+        When checked, properties are evaluated against their own budgeted eco occ % from
+        the uploaded financial statements. The number above is used as a fallback for any
+        property that has no budget data.
+      </span>
     </div>
     <div class="field">
       <label for="period_filter">Reporting Period</label>
@@ -218,6 +229,29 @@
   initDropZone('fin-drop-zone', 'financial_files', 'fin-file-list');
   initDropZone('occ-drop-zone', 'occupancy_file',  'occ-file-list');
   initDropZone('ar-drop-zone', 'ar_aging_files', 'ar-file-list');
+
+  // ── Budget eco occ toggle ─────────────────────────────────────────────────
+  (function () {
+    var chk   = document.getElementById('use_budget_eco_occ');
+    var input = document.getElementById('eco_occ_target');
+    var hint  = document.getElementById('eco-occ-hint');
+    if (!chk || !input) return;
+
+    function applyState() {
+      if (chk.checked) {
+        input.classList.add('eco-target-dimmed');
+        input.title = 'Used as fallback for properties with no budget data';
+        if (hint) hint.style.color = '#374151';
+      } else {
+        input.classList.remove('eco-target-dimmed');
+        input.title = '';
+        if (hint) hint.style.color = '';
+      }
+    }
+
+    chk.addEventListener('change', applyState);
+    applyState(); // apply on page load (browser may restore checkbox state)
+  }());
 })();
 </script>
 {% endblock %}
