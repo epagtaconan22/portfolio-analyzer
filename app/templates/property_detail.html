@@ -56,4 +56,45 @@
   </table>
   </div>
 </section>
+
+<!-- AR Aging Detail -->
+{% for rtype in ["Tenant Rent", "Subsidy"] %}
+{% if ar_by_type[rtype] is defined and ar_by_type[rtype] %}
+<section class="card">
+  <h2>AR Aging — {{ rtype }}</h2>
+  <div class="table-scroll">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Period</th>
+        <th title="Total charges outstanding">Charge Amt</th>
+        <th title="Current-period balance">Current</th>
+        <th title="0–30 days past due">0–30</th>
+        <th title="31–60 days past due">31–60</th>
+        <th title="61–90 days past due">61–90</th>
+        <th title="90+ days past due">Over 90</th>
+        <th title="Credit balances (negative = tenant credits)">Pre-payments</th>
+        <th title="(31-60 + 61-90 + Over 90) / Charge Amount">% &gt;30 Days</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in ar_by_type[rtype] %}
+      <tr>
+        <td>{{ r.period_label }}</td>
+        <td class="currency">{{ r.charge_amount | currency }}</td>
+        <td class="currency">{{ r.current_owed | currency }}</td>
+        <td class="currency">{{ r.owed_0_30 | currency }}</td>
+        <td class="currency">{{ r.owed_31_60 | currency }}</td>
+        <td class="currency">{{ r.owed_61_90 | currency }}</td>
+        <td class="currency">{{ r.owed_over_90 | currency }}</td>
+        <td class="currency">{{ r.prepayments | currency }}</td>
+        <td class="pct">{{ r.pct_overdue | pct }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+{% endfor %}
 {% endblock %}
