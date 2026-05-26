@@ -1,4 +1,4 @@
-"""Builds the 7-tab backup/audit workbook."""
+"""Builds the 8-tab backup/audit workbook (7 original + AR_Aging_Detail)."""
 
 from collections import defaultdict
 import openpyxl
@@ -21,6 +21,7 @@ def build_backup_workbook(
     quality_checks: list[QualityCheck],
     output_path: str,
     eco_occ_target: float = ECO_OCC_TARGET,
+    ar_rows: list | None = None,
 ) -> str:
     """Builds backup workbook at output_path. Returns path."""
     wb = openpyxl.Workbook()
@@ -33,6 +34,7 @@ def build_backup_workbook(
     _build_account_detail(wb, mapped_rows)
     _build_economic_occupancy(wb, kpis)
     _build_quality_checks(wb, quality_checks, kpis, eco_occ_target)
+    _build_ar_aging_detail(wb, ar_rows or [])
 
     wb.save(output_path)
     return output_path
@@ -238,3 +240,47 @@ def _month_name(month: int) -> str:
     names = {1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",
              7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec"}
     return names.get(month, str(month))
+
+
+def _build_ar_aging_detail(wb, ar_rows: list) -> None:
+    """AR_Aging_Detail tab: one row per ARAgingRow, all fields + computed columns."""
+    ws = wb.create_sheet("AR_Aging_Detail")
+    headers = [
+        "Property", "PM", "Source File", "Receivable Type",
+        "Year", "Month", "Period",
+        "Charge Amount", "Current Owed",
+        "0–30", "31–60", "61–90", "Over 90",
+        "Pre-payments", "Total Overdue", "% >30 Days",
+    ]
+    _write_header(ws, headers, 1)
+
+    if not ar_rows:
+        ws.cell(2, 1, "No AR Aging data was uploaded for this analysis.")
+        return
+
+    # Sort: Receivable Type, Property Name, Year, Month
+    sorted_rows = sorted(ar_rows, key=lambda r: (r.receivable_type, r.property_name, r.year, r.month))
+
+    for i, r in enumerate(sorted_rows, 2):
+        charge  = r.charge_amount
+        overdue = r.owed_31_60 + r.owed_61_90 + r.owed_over_90
+        pct_ov  = (overdue / charge) if charge and charge > 0 else None
+
+        ws.cell(i, 1,  r.property_name)
+        ws.cell(i, 2,  r.pm_name)
+        ws.cell(i, 3,  r.source_file)
+        ws.cell(i, 4,  r.receivable_type)
+        ws.cell(i, 5,  r.year)
+        ws.cell(i, 6,  r.month)
+        ws.cell(i, 7,  _month_name(r.month))
+        ws.cell(i, 8,  r.charge_amount);  ws.cell(i, 8).number_format  = CURRENCY_FMT
+        ws.cell(i, 9,  r.current_owed);   ws.cell(i, 9).number_format  = CURRENCY_FMT
+        ws.cell(i, 10, r.owed_0_30);      ws.cell(i, 10).number_format = CURRENCY_FMT
+        ws.cell(i, 11, r.owed_31_60);     ws.cell(i, 11).number_format = CURRENCY_FMT
+        ws.cell(i, 12, r.owed_61_90);     ws.cell(i, 12).number_format = CURRENCY_FMT
+        ws.cell(i, 13, r.owed_over_90);   ws.cell(i, 13).number_format = CURRENCY_FMT
+        ws.cell(i, 14, r.prepayments);    ws.cell(i, 14).number_format = CURRENCY_FMT
+        ws.cell(i, 15, overdue);          ws.cell(i, 15).number_format = CURRENCY_FMT
+        ws.cell(i, 16, pct_ov);           ws.cell(i, 16).number_format = PCT_FMT
+
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"

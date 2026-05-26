@@ -1,4 +1,4 @@
-"""Builds the 3-tab presentation workbook: Dashboard, Property Analysis, Property Monthly KPIs."""
+"""Builds the 4-tab presentation workbook: Dashboard, Property Analysis, Property Monthly KPIs, AR Aging."""
 
 import os
 from typing import Optional
@@ -12,6 +12,15 @@ from app.exporter.styles import (
     SUBHDR_FILL, SUBHEADER_FONT,
 )
 from config import ECO_OCC_TARGET, KPI_FORMULAS
+
+_AR_MONTH_ABBR = {
+    1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
+    7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec",
+}
+
+
+def _ar_period_label(year: int, month: int) -> str:
+    return f"{_AR_MONTH_ABBR.get(month, str(month))}-{year}"
 
 
 # ─── Quarter helpers ─────────────────────────────────────────────────────────
@@ -85,6 +94,7 @@ def build_main_workbook(
     portfolio_name: str,
     output_path: str,
     eco_occ_target: float = ECO_OCC_TARGET,
+    ar_rows: list | None = None,
 ) -> str:
     """Builds main workbook at output_path. Returns path."""
     wb = openpyxl.Workbook()
@@ -93,6 +103,7 @@ def build_main_workbook(
     _build_dashboard(wb, kpis, portfolio_name, eco_occ_target)
     _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target)
     _build_monthly_kpis(wb, kpis)
+    _build_ar_aging(wb, ar_rows or [], portfolio_name)
 
     wb.save(output_path)
     return output_path
@@ -545,6 +556,166 @@ def _apply_property_row_formats(ws, row, headers, agg):
         fmt = fmt_map.get(hdr)
         if fmt:
             ws.cell(row, col_idx).number_format = fmt
+
+
+def _build_ar_aging(wb, ar_rows: list, portfolio_name: str) -> None:
+    """4-block AR Aging tab: portfolio summaries (TR + Sub) + property analysis (TR + Sub)."""
+    ws = wb.create_sheet("AR Aging")
+
+    if not ar_rows:
+        ws.cell(1, 1, "No AR Aging data was uploaded for this analysis.")
+        ws.cell(1, 1).font = BOLD_FONT
+        return
+
+    # Sorted unique periods across all rows
+    periods = sorted({(r.year, r.month) for r in ar_rows})
+    periods_set = set(periods)
+
+    # Build column sequence: alternating period / yoy-delta columns
+    # ("period", yr, mo) — actual data; ("yoy", yr, mo) — delta vs (yr-1, mo)
+    col_seq: list[tuple] = []
+    for (yr, mo) in periods:
+        col_seq.append(("period", yr, mo))
+        if (yr - 1, mo) in periods_set:
+            col_seq.append(("yoy", yr, mo))
+
+    latest_yr, latest_mo = periods[-1]
+    latest_label = _ar_period_label(latest_yr, latest_mo)
+    prior_period = (latest_yr - 1, latest_mo) if (latest_yr - 1, latest_mo) in periods_set else None
+
+    def _agg(rtype: str, yr: int, mo: int) -> dict | None:
+        """Sum AR metrics for a receivable type + period."""
+        rows = [r for r in ar_rows if r.receivable_type == rtype and r.year == yr and r.month == mo]
+        if not rows:
+            return None
+        charge = sum(r.charge_amount for r in rows)
+        overdue = sum(r.owed_31_60 + r.owed_61_90 + r.owed_over_90 for r in rows)
+        return {
+            "current_owed": sum(r.current_owed for r in rows),
+            "prepayments":  sum(r.prepayments for r in rows),
+            "pct_overdue":  (overdue / charge) if charge > 0 else None,
+        }
+
+    row = 1
+
+    # ── Blocks 1 & 2: Portfolio AR Summary ───────────────────────────────────
+    for rtype in ("Tenant Rent", "Subsidy"):
+        rtype_rows = [r for r in ar_rows if r.receivable_type == rtype]
+        if not rtype_rows:
+            continue
+
+        prop_count = len({r.property_name for r in rtype_rows})
+        header_text = (
+            f"{portfolio_name} — Portfolio AR Summary — {rtype} "
+            f"({prop_count} Propert{'y' if prop_count == 1 else 'ies'})"
+        )
+        ws.cell(row, 1, header_text).font = BOLD_FONT
+        row += 1
+
+        num_cols = 1 + len(col_seq)
+        ws.cell(row, 1, "Metric")
+        for ci, (ctype, yr, mo) in enumerate(col_seq, 2):
+            ws.cell(row, ci, "YoY Δ" if ctype == "yoy" else _ar_period_label(yr, mo))
+        style_header_row(ws, row, num_cols)
+        row += 1
+
+        # Pre-compute period aggregates for this receivable type
+        period_aggs = {(yr, mo): _agg(rtype, yr, mo) for (yr, mo) in periods}
+
+        # Three metric rows: Current Owed, Pre-payments, % >30 Days
+        metric_defs = [
+            ("Current Owed", "current_owed", CURRENCY_FMT, False),
+            ("Pre-payments",  "prepayments",  CURRENCY_FMT, False),
+            ("% >30 Days",    "pct_overdue",  PCT_FMT,      False),
+        ]
+        for label, key, fmt, fav_pos in metric_defs:
+            ws.cell(row, 1, label).font = BOLD_FONT
+            for ci, (ctype, yr, mo) in enumerate(col_seq, 2):
+                if ctype == "period":
+                    agg = period_aggs.get((yr, mo))
+                    val = agg[key] if agg else None
+                    _c(ws, row, ci, val, fmt)
+                else:
+                    curr = period_aggs.get((yr, mo))
+                    prev = period_aggs.get((yr - 1, mo))
+                    if curr and prev and curr.get(key) is not None and prev.get(key) is not None:
+                        delta = curr[key] - prev[key]
+                        _c(ws, row, ci, delta, fmt)
+                        apply_variance_fill(ws.cell(row, ci), delta, favorable_is_positive=fav_pos)
+                    else:
+                        ws.cell(row, ci, None)
+            row += 1
+
+        row += 2  # blank rows between blocks
+
+    # ── Blocks 3 & 4: Property AR Analysis ───────────────────────────────────
+    for rtype in ("Tenant Rent", "Subsidy"):
+        rtype_rows = [r for r in ar_rows if r.receivable_type == rtype]
+        if not rtype_rows:
+            continue
+
+        ws.cell(row, 1, f"Property AR Analysis — {rtype} (As of {latest_label})").font = BOLD_FONT
+        row += 1
+
+        prop_headers = [
+            "Property", "PM",
+            "Current Owed", "Pre-payments", "% >30 Days",
+            "YoY $ Δ (Current Owed)", "YoY Δ (% >30)",
+        ]
+        for ci, h in enumerate(prop_headers, 1):
+            ws.cell(row, ci, h)
+        style_header_row(ws, row, len(prop_headers))
+        header_row = row
+        row += 1
+        data_start_row = row
+
+        # Aggregate per property for latest period (sum if multiple files)
+        def _prop_agg(prop: str, yr: int, mo: int) -> dict | None:
+            rows = [r for r in rtype_rows if r.property_name == prop and r.year == yr and r.month == mo]
+            if not rows:
+                return None
+            charge = sum(r.charge_amount for r in rows)
+            overdue = sum(r.owed_31_60 + r.owed_61_90 + r.owed_over_90 for r in rows)
+            return {
+                "current_owed": sum(r.current_owed for r in rows),
+                "prepayments":  sum(r.prepayments for r in rows),
+                "pct_overdue":  (overdue / charge) if charge > 0 else None,
+                "pm_name":      rows[0].pm_name,
+            }
+
+        latest_props = sorted({r.property_name for r in rtype_rows
+                                if r.year == latest_yr and r.month == latest_mo})
+
+        for prop_name in latest_props:
+            curr = _prop_agg(prop_name, latest_yr, latest_mo)
+            if curr is None:
+                continue
+            ws.cell(row, 1, prop_name)
+            ws.cell(row, 2, curr["pm_name"])
+            _c(ws, row, 3, curr["current_owed"], CURRENCY_FMT)
+            _c(ws, row, 4, curr["prepayments"],  CURRENCY_FMT)
+            _c(ws, row, 5, curr["pct_overdue"],  PCT_FMT)
+
+            if prior_period:
+                prev = _prop_agg(prop_name, prior_period[0], prior_period[1])
+                if prev:
+                    co_delta = curr["current_owed"] - prev["current_owed"]
+                    _c(ws, row, 6, co_delta, CURRENCY_FMT)
+                    apply_variance_fill(ws.cell(row, 6), co_delta, favorable_is_positive=False)
+                    if curr["pct_overdue"] is not None and prev["pct_overdue"] is not None:
+                        pct_delta = curr["pct_overdue"] - prev["pct_overdue"]
+                        _c(ws, row, 7, pct_delta, PCT_FMT)
+                        apply_variance_fill(ws.cell(row, 7), pct_delta, favorable_is_positive=False)
+            row += 1
+
+        if row > data_start_row:
+            ws.freeze_panes = f"A{data_start_row}"
+            ws.auto_filter.ref = (
+                f"A{header_row}:{get_column_letter(len(prop_headers))}{row - 1}"
+            )
+        row += 2  # blank rows between blocks
+
+    _autofit_columns(ws)
 
 
 def _autofit_columns(ws, max_width=60):

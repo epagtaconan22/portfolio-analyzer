@@ -149,9 +149,11 @@ def run_analysis():
     main_path   = os.path.join(run_dir, f"{safe_name} Property Analysis.xlsx")
     backup_path = os.path.join(run_dir, f"{safe_name} Property Analysis backup.xlsx")
 
-    build_main_workbook(kpis, portfolio_name, main_path, eco_occ_target)
+    build_main_workbook(kpis, portfolio_name, main_path, eco_occ_target,
+                        ar_rows=ar_rows if ar_rows else None)
     build_backup_workbook(mapped_rows, kpis, source_index, mapping_entries, [],
-                          backup_path, eco_occ_target)
+                          backup_path, eco_occ_target,
+                          ar_rows=ar_rows if ar_rows else None)
 
     val_checks = validate_both_workbooks(main_path, backup_path)
     quality_checks = list(val_checks)
