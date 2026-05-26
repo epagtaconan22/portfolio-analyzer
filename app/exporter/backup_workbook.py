@@ -250,7 +250,7 @@ def _build_ar_aging_detail(wb, ar_rows: list) -> None:
         "Year", "Month", "Period",
         "Charge Amount", "Current Owed",
         "0–30", "31–60", "61–90", "Over 90",
-        "Pre-payments", "Total Overdue", "% >30 Days",
+        "Pre-payments", "Total Over 60", "% >60 Days",
     ]
     _write_header(ws, headers, 1)
 
@@ -262,9 +262,9 @@ def _build_ar_aging_detail(wb, ar_rows: list) -> None:
     sorted_rows = sorted(ar_rows, key=lambda r: (r.receivable_type, r.property_name, r.year, r.month))
 
     for i, r in enumerate(sorted_rows, 2):
-        charge  = r.charge_amount
-        overdue = r.owed_31_60 + r.owed_61_90 + r.owed_over_90
-        pct_ov  = (overdue / charge) if charge and charge > 0 else None
+        charge   = r.charge_amount
+        over_60  = r.owed_61_90 + r.owed_over_90
+        pct_ov   = (over_60 / charge) if charge and charge > 0 else None
 
         ws.cell(i, 1,  r.property_name)
         ws.cell(i, 2,  r.pm_name)
@@ -280,7 +280,7 @@ def _build_ar_aging_detail(wb, ar_rows: list) -> None:
         ws.cell(i, 12, r.owed_61_90);     ws.cell(i, 12).number_format = CURRENCY_FMT
         ws.cell(i, 13, r.owed_over_90);   ws.cell(i, 13).number_format = CURRENCY_FMT
         ws.cell(i, 14, r.prepayments);    ws.cell(i, 14).number_format = CURRENCY_FMT
-        ws.cell(i, 15, overdue);          ws.cell(i, 15).number_format = CURRENCY_FMT
+        ws.cell(i, 15, over_60);          ws.cell(i, 15).number_format = CURRENCY_FMT
         ws.cell(i, 16, pct_ov);           ws.cell(i, 16).number_format = PCT_FMT
 
     ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}1"

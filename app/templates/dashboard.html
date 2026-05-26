@@ -165,9 +165,9 @@
           {% endif %}
         {% endfor %}
       </tr>
-      <!-- % >30 Days row -->
+      <!-- % >60 Days row -->
       <tr>
-        <td title="% of charges that are 31+ days past due">% &gt;30 Days</td>
+        <td title="% of charges that are 61+ days past due">% &gt;60 Days</td>
         {% for col in ar.cols %}
           {% if col.type == 'period' %}
             <td class="pct">{{ col.pct_overdue | pct }}</td>
@@ -200,12 +200,12 @@
         <th>PM</th>
         <th title="Tenant Rent current-period balance">TR Current Owed</th>
         <th title="Tenant Rent credit balances">TR Pre-payments</th>
-        <th title="Tenant Rent % of charges 31+ days past due">TR % &gt;30</th>
-        <th title="YoY change in Tenant Rent % &gt;30 days">TR YoY Δ % &gt;30</th>
+        <th title="Tenant Rent % of charges 61+ days past due">TR % &gt;60</th>
+        <th title="YoY change in Tenant Rent % &gt;60 days">TR YoY Δ % &gt;60</th>
         <th title="Subsidy current-period balance">Sub Current Owed</th>
         <th title="Subsidy credit balances">Sub Pre-payments</th>
-        <th title="Subsidy % of charges 31+ days past due">Sub % &gt;30</th>
-        <th title="YoY change in Subsidy % &gt;30 days">Sub YoY Δ % &gt;30</th>
+        <th title="Subsidy % of charges 61+ days past due">Sub % &gt;60</th>
+        <th title="YoY change in Subsidy % &gt;60 days">Sub YoY Δ % &gt;60</th>
       </tr>
     </thead>
     <tbody>

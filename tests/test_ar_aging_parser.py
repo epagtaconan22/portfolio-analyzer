@@ -127,13 +127,15 @@ def test_blank_row_stops_iteration(tenant_rent_wb):
 def test_total_overdue_computed(tenant_rent_wb):
     rows = parse_ar_aging_reports([tenant_rent_wb])
     alora = next(r for r in rows if "Alora" in r.property_name)
-    assert alora.total_overdue == pytest.approx(600)
+    # total_over_60 = owed_61_90 + owed_over_90 = 200 + 100 = 300 (excludes 31-60 bucket)
+    assert alora.total_overdue == pytest.approx(300)
 
 
 def test_pct_overdue_computed(tenant_rent_wb):
     rows = parse_ar_aging_reports([tenant_rent_wb])
     alora = next(r for r in rows if "Alora" in r.property_name)
-    assert alora.pct_overdue == pytest.approx(0.06)
+    # pct_over_60 = 300 / 10000 = 0.03 (only 61+ days past due)
+    assert alora.pct_overdue == pytest.approx(0.03)
 
 
 def test_none_numeric_treated_as_zero(tmp_path):

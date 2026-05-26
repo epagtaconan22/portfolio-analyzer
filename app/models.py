@@ -152,13 +152,24 @@ class ARAgingRow:
     prepayments: float       # Col 7 (negative = credits)
 
     @property
+    def total_over_60(self) -> float:
+        """61-90 + Over-90 — amounts more than 60 days past due."""
+        return self.owed_61_90 + self.owed_over_90
+
+    @property
+    def pct_over_60(self) -> Optional[float]:
+        """% of charge_amount that is >60 days past due."""
+        if self.charge_amount and self.charge_amount > 0:
+            return self.total_over_60 / self.charge_amount
+        return None
+
+    # Legacy alias kept for any downstream callers that pre-date the >60 change
+    @property
     def total_overdue(self) -> float:
-        """31-60 + 61-90 + Over-90 — amounts past the 0-30 bucket."""
-        return self.owed_31_60 + self.owed_61_90 + self.owed_over_90
+        """Alias for total_over_60 (renamed from >30 to >60 days)."""
+        return self.total_over_60
 
     @property
     def pct_overdue(self) -> Optional[float]:
-        """% of charge_amount that is >30 days past due."""
-        if self.charge_amount and self.charge_amount > 0:
-            return self.total_overdue / self.charge_amount
-        return None
+        """Alias for pct_over_60 (renamed from >30 to >60 days)."""
+        return self.pct_over_60

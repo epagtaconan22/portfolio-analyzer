@@ -99,11 +99,11 @@ def _agg_ar(ar_rows: list[dict], receivable_type: str, year: int, month: int) ->
     if not rows:
         return None
     charge_amount = sum(r["charge_amount"] for r in rows)
-    total_overdue = sum(r["owed_31_60"] + r["owed_61_90"] + r["owed_over_90"] for r in rows)
+    total_over_60 = sum(r["owed_61_90"] + r["owed_over_90"] for r in rows)
     return {
         "current_owed":   sum(r["current_owed"] for r in rows),
         "prepayments":    sum(r["prepayments"] for r in rows),
-        "pct_overdue":    total_overdue / charge_amount if charge_amount > 0 else None,
+        "pct_overdue":    total_over_60 / charge_amount if charge_amount > 0 else None,
         "property_count": len({r["property_name"] for r in rows}),
     }
 
@@ -119,11 +119,11 @@ def _agg_ar_for_prop(ar_rows: list[dict], property_name: str,
     if not rows:
         return None
     charge = sum(r["charge_amount"] for r in rows)
-    overdue = sum(r["owed_31_60"] + r["owed_61_90"] + r["owed_over_90"] for r in rows)
+    over_60 = sum(r["owed_61_90"] + r["owed_over_90"] for r in rows)
     return {
         "current_owed": sum(r["current_owed"] for r in rows),
         "prepayments":  sum(r["prepayments"] for r in rows),
-        "pct_overdue":  overdue / charge if charge > 0 else None,
+        "pct_overdue":  over_60 / charge if charge > 0 else None,
     }
 
 
