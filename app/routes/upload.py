@@ -6,6 +6,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from werkzeug.utils import secure_filename
 from app.parser.financial import parse_financial_workbooks
 from app.parser.occupancy import parse_occupancy_report
+from app.parser.ar_aging import parse_ar_aging_reports
 from app.mapper.account_mapper import map_rows
 from app.calculator.noi import calculate_noi
 from app.calculator.economic_occ import enrich_eco_occ
@@ -15,7 +16,7 @@ from app.exporter.backup_workbook import build_backup_workbook
 from app.exporter.validator import validate_both_workbooks
 from app.storage.runs import new_run_id, save_run
 from app.models import QualityCheck
-from config import ECO_OCC_TARGET, QUARTERS, PROPERTY_NAME_MAP
+from config import ECO_OCC_TARGET, QUARTERS, PROPERTY_NAME_MAP, MONTHS
 
 bp = Blueprint("upload", __name__)
 ALLOWED_EXT = {".xlsx", ".xls"}
@@ -82,11 +83,9 @@ def run_analysis():
             if name and cat:
                 custom_mapping[name] = (cat, trt, in_noi, in_eco)
 
-    # Run pipeline
+    # ── Financial pipeline ────────────────────────────────────────────────────
     raw_rows, source_index = parse_financial_workbooks(saved_paths, pm_name_map)
 
-    # Normalize property names to canonical display names before any downstream processing.
-    # This ensures the Excel exports, stored JSON, and web UI all use the same short names.
     for _row in raw_rows:
         _row.property_name = PROPERTY_NAME_MAP.get(_row.property_name, _row.property_name)
     for _entry in source_index:
@@ -99,11 +98,23 @@ def run_analysis():
             occ_file.save(occ_path)
             occ_rows.extend(parse_occupancy_report(occ_path))
 
-    # Normalize occupancy report property names so the join with financial data works
-    # even when the two sources use different spellings of the same property.
     for _row in occ_rows:
         _row.property_name = PROPERTY_NAME_MAP.get(_row.property_name, _row.property_name)
 
+    # ── AR Aging pipeline ─────────────────────────────────────────────────────
+    ar_rows = []
+    ar_files = request.files.getlist("ar_aging_files")
+    for ar_file in ar_files:
+        if ar_file and ar_file.filename:
+            ar_path = os.path.join("uploads", secure_filename(ar_file.filename))
+            ar_file.save(ar_path)
+            ar_rows.extend(parse_ar_aging_reports([ar_path]))
+
+    # Apply PROPERTY_NAME_MAP to AR rows (parser defers to upload layer)
+    for _row in ar_rows:
+        _row.property_name = PROPERTY_NAME_MAP.get(_row.property_name, _row.property_name)
+
+    # ── NOI / eco occ / physical occ ─────────────────────────────────────────
     mapped_rows, mapping_entries = map_rows(raw_rows, custom_mapping)
     kpis = calculate_noi(mapped_rows)
     kpis = enrich_eco_occ(mapped_rows, kpis)
@@ -125,11 +136,11 @@ def run_analysis():
         if k.property_name.lower() in carveouts:
             k.is_carveout = True
 
-    # Flag below eco occ target
     for k in kpis:
         if k.eco_occ_pct is not None:
             k.is_below_eco_occ_target = k.eco_occ_pct < eco_occ_target
 
+    # ── Build workbooks ───────────────────────────────────────────────────────
     run_id  = new_run_id()
     run_dir = os.path.join("runs", run_id)
     os.makedirs(run_dir, exist_ok=True)
@@ -139,14 +150,19 @@ def run_analysis():
     backup_path = os.path.join(run_dir, f"{safe_name} Property Analysis backup.xlsx")
 
     build_main_workbook(kpis, portfolio_name, main_path, eco_occ_target)
-    build_backup_workbook(mapped_rows, kpis, source_index, mapping_entries, [], backup_path, eco_occ_target)
+    build_backup_workbook(mapped_rows, kpis, source_index, mapping_entries, [],
+                          backup_path, eco_occ_target)
 
     val_checks = validate_both_workbooks(main_path, backup_path)
-    quality_checks = list(val_checks)  # already QualityCheck instances
+    quality_checks = list(val_checks)
 
     years = sorted({k.year for k in kpis})
     props = sorted({k.property_name for k in kpis})
     pm_names_used = sorted({k.pm_name for k in kpis})
+
+    # AR period metadata for history page
+    ar_tr_periods  = sorted({(r.year, r.month) for r in ar_rows if r.receivable_type == "Tenant Rent"})
+    ar_sub_periods = sorted({(r.year, r.month) for r in ar_rows if r.receivable_type == "Subsidy"})
 
     metadata = {
         "created_at": datetime.now().isoformat(),
@@ -161,9 +177,12 @@ def run_analysis():
         "carveout_properties": list(carveouts),
         "main_workbook": os.path.basename(main_path),
         "backup_workbook": os.path.basename(backup_path),
+        "ar_tenant_rent_periods": [f"{MONTHS[mo]}-{yr}" for (yr, mo) in ar_tr_periods],
+        "ar_subsidy_periods":     [f"{MONTHS[mo]}-{yr}" for (yr, mo) in ar_sub_periods],
     }
 
-    save_run(run_id, metadata, kpis, source_index, mapping_entries, quality_checks)
+    save_run(run_id, metadata, kpis, source_index, mapping_entries, quality_checks,
+             ar_rows=ar_rows if ar_rows else None)
 
     # Clean up temp uploads
     for p in saved_paths:

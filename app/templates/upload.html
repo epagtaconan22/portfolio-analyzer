@@ -49,6 +49,24 @@
   </section>
 
   <section class="card">
+    <h2>AR Aging Reports (Optional)</h2>
+    <div class="field">
+      <label>AR Aging Workbooks (.xlsx)</label>
+      <div class="drop-zone" id="ar-drop-zone">
+        <input type="file" id="ar_aging_files" name="ar_aging_files"
+               class="drop-zone-input" multiple accept=".xlsx,.xls">
+        <div class="drop-zone-body">
+          <div class="drop-zone-icon">📋</div>
+          <div class="drop-zone-text">Drag &amp; drop AR aging files here</div>
+          <div class="drop-zone-sub">or <span class="browse-link" data-for="ar_aging_files">browse files</span></div>
+        </div>
+        <ul class="file-list" id="ar-file-list"></ul>
+      </div>
+      <span class="hint">Files named <code>PMC_AR Aging_Tenant Rent_MM_YYYY.xlsx</code> or <code>PMC_AR Aging_Subsidy_MM_YYYY.xlsx</code>. Multiple files accepted — one per period per type per PM company.</span>
+    </div>
+  </section>
+
+  <section class="card">
     <h2>Analysis Settings</h2>
     <div class="field">
       <label for="pm_names">Property Manager Names (one per line, matches file order)</label>
@@ -199,6 +217,7 @@
   // Wire up both drop zones
   initDropZone('fin-drop-zone', 'financial_files', 'fin-file-list');
   initDropZone('occ-drop-zone', 'occupancy_file',  'occ-file-list');
+  initDropZone('ar-drop-zone', 'ar_aging_files', 'ar-file-list');
 })();
 </script>
 {% endblock %}
