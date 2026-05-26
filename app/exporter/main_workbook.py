@@ -5,6 +5,7 @@ from typing import Optional
 import openpyxl
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.comments import Comment
 from app.models import PropertyPeriodKPIs
 from app.exporter.styles import (
     style_header_row, add_kpi_comment, apply_variance_fill,
@@ -13,7 +14,32 @@ from app.exporter.styles import (
 )
 from config import ECO_OCC_TARGET, KPI_FORMULAS
 
-_GROUP_PARENTS = {"Actual Income", "Actual Expenses", "Actual NOI", "GPR", "Eco Occ %"}
+_GROUP_PARENTS = {"Actual Income", "Actual Expenses", "Actual NOI", "GPR",
+                  "Eco Occ %", "Physical Occ %", "Leakage Gap"}
+
+# Section header style: darker navy (#1F4E79) matching the app's primary colour
+_DARK_HDR_FILL = PatternFill("solid", fgColor="1F4E79")
+_DARK_HDR_FONT = Font(bold=True, color="FFFFFF", size=10)
+
+# Alternating table row fill (ice blue)
+_ICE_BLUE_FILL = PatternFill("solid", fgColor="DEEAF1")
+_WHITE_FILL    = PatternFill("solid", fgColor="FFFFFF")
+
+# Traffic-light fills for Leakage Gap
+_LEAKAGE_GREEN  = PatternFill("solid", fgColor="C6EFCE")   # 0 – 2%  healthy
+_LEAKAGE_YELLOW = PatternFill("solid", fgColor="FFEB9C")   # 3 – 5%  caution
+_LEAKAGE_RED    = PatternFill("solid", fgColor="FFC7CE")   # > 5%    problem
+
+_LEAKAGE_GAP_NOTE = (
+    "Leakage Gap = Physical Occ % − Economic Occ %\n\n"
+    "Interpretation guide:\n"
+    "  0–2%: Very healthy. Minimal leakage. Usually normal timing or small resident balances.\n"
+    "  2–3%: Still generally healthy if stable and explained. Watch trend, but not automatically a concern.\n"
+    "  3–5%: Caution range. Requires explanation: A/R aging, concessions, subsidy delays, "
+    "vacancy loss, bad debt, or posting issues.\n"
+    "  5% or greater: Problem range. High physical occupancy may be masking collection weakness "
+    "or revenue leakage."
+)
 
 _AR_MONTH_ABBR = {
     1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
@@ -79,7 +105,6 @@ _DASHBOARD_KPI_ROWS = [
     ("Eco Occ %",           "eco_occ_pct",          PCT_FMT),
     ("Budget Eco Occ %",    "budget_eco_occ_pct",   PCT_FMT),
     ("Eco Occ Variance",    "eco_occ_variance",     PCT_FMT),
-    None,
     ("Physical Occ %",      "physical_occ_pct",     PCT_FMT),
     ("Leakage Gap",         "leakage_gap",          PCT_FMT),
     None,
@@ -154,7 +179,20 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
 
     _PARENT_FILL = PatternFill("solid", fgColor="2E75B6")
     _PARENT_FONT = Font(bold=True, color="FFFFFF", size=10)
-    _NON_GROUPED = {"Physical Occ %", "Leakage Gap", "Income/Unit", "Expense/Unit", "NOI/Unit"}
+    _NON_GROUPED = {"Income/Unit", "Expense/Unit", "NOI/Unit"}
+
+    # Pre-compute per-period unit counts and excluded properties for per-unit notes
+    per_unit_notes: dict[str, tuple] = {}  # period_label -> (total_units, excluded_props_list)
+    for (yr, q) in quarters:
+        q_kpis_nu = [k for k in _kpis_for_quarter(kpis, yr, q) if not k.is_carveout]
+        prop_units: dict[str, int] = {}
+        for k in q_kpis_nu:
+            if k.total_units is not None:
+                prop_units[k.property_name] = k.total_units
+        all_q_props = {k.property_name for k in q_kpis_nu}
+        total_u = sum(prop_units.values()) if prop_units else None
+        excluded_u = sorted(all_q_props - set(prop_units.keys()))
+        per_unit_notes[_quarter_label(yr, q)] = (total_u, excluded_u)
 
     # KPI data rows
     for entry in _DASHBOARD_KPI_ROWS:
@@ -163,12 +201,45 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
             continue
         label, key, fmt = entry
         cell = ws.cell(row, 1, label)
-        add_kpi_comment(cell, label)
+
+        # Leakage Gap: override comment with interpretation guide
+        if label == "Leakage Gap":
+            c = Comment(_LEAKAGE_GAP_NOTE, "Portfolio Analyzer")
+            c.width = 420
+            c.height = 160
+            cell.comment = c
+        else:
+            add_kpi_comment(cell, label)
+
         for col_idx, period_lbl in enumerate(period_labels, 2):
             val = period_aggs[period_lbl].get(key)
             c = ws.cell(row, col_idx, val)
             if fmt:
                 c.number_format = fmt
+
+            # Leakage Gap: apply traffic-light fill to each period value
+            if label == "Leakage Gap" and val is not None:
+                if 0 <= val <= 0.02:
+                    c.fill = _LEAKAGE_GREEN
+                elif 0.03 < val <= 0.05:
+                    c.fill = _LEAKAGE_YELLOW
+                elif val > 0.05:
+                    c.fill = _LEAKAGE_RED
+
+            # Per-unit rows: add a comment to each value cell with units used
+            if label in ("Income/Unit", "Expense/Unit", "NOI/Unit"):
+                total_u, excluded_u = per_unit_notes.get(period_lbl, (None, []))
+                if total_u is not None:
+                    note_lines = [f"Calculated using {total_u:,} total units."]
+                    if excluded_u:
+                        note_lines.append(
+                            "\nProperties excluded (no occupancy data):\n"
+                            + "\n".join(f"  • {p}" for p in excluded_u)
+                        )
+                    cm = Comment("\n".join(note_lines), "Portfolio Analyzer")
+                    cm.width = 320
+                    cm.height = 100 + 14 * len(excluded_u)
+                    c.comment = cm
 
         if label in _GROUP_PARENTS:
             for col_idx in range(1, total_kpi_cols + 1):
@@ -207,7 +278,7 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
     row += 2
 
     # ── Portfolio AR Aging Summary ───────────────────────────────────────────
-    row = _write_dashboard_ar_summary(ws, ar_rows, portfolio_name, row)
+    row = _write_dashboard_ar_summary(ws, ar_rows, row, kpi_props=props)
     if ar_rows:
         row += 1
 
@@ -466,7 +537,8 @@ def _write_top_noi_table(ws, kpis, start_row, top_n, favorable):
                "NOI Variance", "NOI Variance %", "Driver 1", "Driver 2", "Commentary"]
     for col, h in enumerate(headers, 1):
         ws.cell(start_row, col, h)
-    style_header_row(ws, start_row, len(headers), fill=SUBHDR_FILL, font=SUBHEADER_FONT)
+    style_header_row(ws, start_row, len(headers), fill=_DARK_HDR_FILL, font=_DARK_HDR_FONT)
+    ws.row_dimensions[start_row].height = 26
     row = start_row + 1
 
     years = sorted({k.year for k in kpis})
@@ -500,6 +572,10 @@ def _write_top_noi_table(ws, kpis, start_row, top_n, favorable):
         curr_noi = curr_by_prop[prop]
         var_pct = var / abs(prev_noi) if prev_noi else None
         k = meta_by_prop[prop]
+        # Alternating ice-blue rows
+        row_fill = _ICE_BLUE_FILL if rank % 2 == 1 else _WHITE_FILL
+        for ci in range(1, len(headers) + 1):
+            ws.cell(row, ci).fill = row_fill
         ws.cell(row, 1, rank)
         ws.cell(row, 2, prop)
         ws.cell(row, 3, k.pm_name)
@@ -567,10 +643,15 @@ def _write_below_target_table(ws, kpis, start_row, eco_occ_target,
                    "Driver 1", "Driver 2"]
     for col, h in enumerate(headers, 1):
         ws.cell(start_row, col, h)
-    style_header_row(ws, start_row, len(headers), fill=SUBHDR_FILL, font=SUBHEADER_FONT)
+    style_header_row(ws, start_row, len(headers), fill=_DARK_HDR_FILL, font=_DARK_HDR_FONT)
+    ws.row_dimensions[start_row].height = 26
     row = start_row + 1
 
-    for eco_occ, prop, pm, agg, effective_target in below:
+    for rank, (eco_occ, prop, pm, agg, effective_target) in enumerate(below):
+        # Alternating ice-blue rows
+        row_fill = _ICE_BLUE_FILL if rank % 2 == 0 else _WHITE_FILL
+        for ci in range(1, len(headers) + 1):
+            ws.cell(row, ci).fill = row_fill
         d1, d2 = _eco_occ_drivers(agg)
         ws.cell(row, 1, prop)
         ws.cell(row, 2, pm)
@@ -587,6 +668,12 @@ def _write_below_target_table(ws, kpis, start_row, eco_occ_target,
         else:
             ws.cell(row, 1, f"All properties at or above {eco_occ_target:.0%} target")
         row += 1
+
+    # Autofilter on the header row (covers the data range below it)
+    last_data_row = row - 1
+    ws.auto_filter.ref = (
+        f"A{start_row}:{get_column_letter(len(headers))}{last_data_row}"
+    )
     return row
 
 
@@ -701,7 +788,8 @@ def _generate_portfolio_summary(kpis: list, eco_occ_target: float) -> str:
     return "\n\n".join([s1, s2, s3, s4, s5, s6])
 
 
-def _write_dashboard_ar_summary(ws, ar_rows: list, portfolio_name: str, start_row: int) -> int:
+def _write_dashboard_ar_summary(ws, ar_rows: list, start_row: int,
+                                kpi_props: set | None = None) -> int:
     """Write portfolio-level AR Aging summary block on the Dashboard tab."""
     if not ar_rows:
         return start_row
@@ -714,6 +802,10 @@ def _write_dashboard_ar_summary(ws, ar_rows: list, portfolio_name: str, start_ro
         if (yr - 1, mo) in periods_set:
             col_seq.append(("yoy", yr, mo))
 
+    # Properties present in the main KPI analysis but absent from AR data
+    ar_all_props = {r.property_name for r in ar_rows}
+    excluded_from_ar = sorted((kpi_props or set()) - ar_all_props)
+
     row = start_row
     for rtype in ("Tenant Rent", "Subsidy"):
         rtype_rows = [r for r in ar_rows if r.receivable_type == rtype]
@@ -722,10 +814,22 @@ def _write_dashboard_ar_summary(ws, ar_rows: list, portfolio_name: str, start_ro
 
         prop_count = len({r.property_name for r in rtype_rows})
         header_text = (
-            f"{portfolio_name} — Portfolio AR Summary — {rtype} "
+            f"Portfolio AR Summary — {rtype} "
             f"({prop_count} Propert{'y' if prop_count == 1 else 'ies'})"
         )
-        ws.cell(row, 1, header_text).font = BOLD_FONT
+        title_cell = ws.cell(row, 1, header_text)
+        title_cell.font = BOLD_FONT
+        # Add a comment listing properties not included in AR data
+        if excluded_from_ar:
+            note = (
+                "Properties in analysis but excluded from this AR section\n"
+                "(no AR aging file uploaded for these properties):\n"
+                + "\n".join(f"  • {p}" for p in excluded_from_ar)
+            )
+            cm = Comment(note, "Portfolio Analyzer")
+            cm.width = 320
+            cm.height = 80 + 14 * len(excluded_from_ar)
+            title_cell.comment = cm
         row += 1
 
         num_cols = 1 + len(col_seq)
@@ -750,11 +854,17 @@ def _write_dashboard_ar_summary(ws, ar_rows: list, portfolio_name: str, start_ro
 
         period_aggs_ar = {(yr, mo): _agg(yr, mo) for (yr, mo) in periods}
 
-        for label, key, fmt, fav_pos in [
+        metric_defs = [
             ("Current Owed", "current_owed", CURRENCY_FMT, False),
             ("Pre-payments",  "prepayments",  CURRENCY_FMT, False),
             ("% >30 Days",    "pct_overdue",  PCT_FMT,      False),
-        ]:
+        ]
+        for m_idx, (label, key, fmt, fav_pos) in enumerate(metric_defs):
+            # Alternating ice-blue fill across data rows
+            row_fill = _ICE_BLUE_FILL if m_idx % 2 == 0 else _WHITE_FILL
+            for ci in range(1, num_cols + 1):
+                ws.cell(row, ci).fill = row_fill
+
             ws.cell(row, 1, label).font = BOLD_FONT
             for ci, (ctype, yr, mo) in enumerate(col_seq, 2):
                 if ctype == "period":
@@ -767,6 +877,7 @@ def _write_dashboard_ar_summary(ws, ar_rows: list, portfolio_name: str, start_ro
                     if curr and prev and curr.get(key) is not None and prev.get(key) is not None:
                         delta = curr[key] - prev[key]
                         _c(ws, row, ci, delta, fmt)
+                        # Variance fill overrides the alternating fill
                         apply_variance_fill(ws.cell(row, ci), delta, favorable_is_positive=fav_pos)
             row += 1
 
