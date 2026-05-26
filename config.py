@@ -315,6 +315,7 @@ ACCOUNT_MAPPING_RULES = [
 # values are the canonical names.  Applied during upload so all downstream
 # storage, calculations, and exports use the canonical names.
 PROPERTY_NAME_MAP: dict[str, str] = {
+    # ── Full names (from financial workbook sheet names) ──────────────────────
     "4760 W. Melrose Ave.":            "Emerson",
     "Allanza Apt. Homes":              "Allanza",
     "Alora Family":                    "Alora",
@@ -331,7 +332,18 @@ PROPERTY_NAME_MAP: dict[str, str] = {
     "Sage Pointe Apartments":          "Sage Pointe",
     "Solterra Senior Residences":      "Solterra",
     "Sonoma Court Apartments":         "Sonoma Court",
-    "Ten Fifty B Street Hsg Ptrs":     "Ten Fifty B Street",
+    "Ten Fifty B Street":               "1050B I",
+    "Ten Fifty B Street Hsg Ptrs":     "1050B II",
     "Ventaliso Apartments":            "Ventaliso",
     "Vitalia (Bascom) Apts.":          "Vitalia",
+    # ── Yardi 26-char truncated names (stored literally in occupancy cells) ───
+    # Yardi truncates property names longer than 23 characters and appends "..."
+    # so the cell contains exactly [first 23 chars + "..."] = 26 chars total.
+    # These entries ensure the occupancy–financial join succeeds even when the
+    # occupancy report stores the truncated form.
+    "Orange Gardens Apartmen...":      "Orange Gardens",
+    "Ten Fifty B Street Hsg ...":      "1050B II",
+    "Monte Vista II Family H...":      "Monte Vista II",
+    "Solterra Senior Residen...":      "Solterra",
+    "Luna at Pacific Highlan...":      "Luna",
 }
