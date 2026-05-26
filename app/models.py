@@ -134,3 +134,31 @@ class QualityCheck:
     check_name: str
     passed: bool
     detail: str = ""
+
+@dataclass
+class ARAgingRow:
+    property_name: str       # After PROPERTY_NAME_MAP normalization
+    pm_name: str             # Extracted from filename prefix before first "_"
+    source_file: str         # Basename of source file
+    receivable_type: str     # "Tenant Rent" | "Subsidy"
+    year: int
+    month: int               # 1–12
+    charge_amount: float     # Col 1
+    current_owed: float      # Col 2
+    owed_0_30: float         # Col 3
+    owed_31_60: float        # Col 4
+    owed_61_90: float        # Col 5
+    owed_over_90: float      # Col 6
+    prepayments: float       # Col 7 (negative = credits)
+
+    @property
+    def total_overdue(self) -> float:
+        """31-60 + 61-90 + Over-90 — amounts past the 0-30 bucket."""
+        return self.owed_31_60 + self.owed_61_90 + self.owed_over_90
+
+    @property
+    def pct_overdue(self) -> Optional[float]:
+        """% of charge_amount that is >30 days past due."""
+        if self.charge_amount and self.charge_amount > 0:
+            return self.total_overdue / self.charge_amount
+        return None
