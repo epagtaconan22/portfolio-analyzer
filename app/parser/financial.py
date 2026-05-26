@@ -330,5 +330,14 @@ def _infer_year(sheet_name: str, title_rows: list, header_strs: list[str]) -> in
     return 0
 
 
+# Known PM company names — searched in filename (case-insensitive) before falling back
+# to the raw stem. Add new names here as new PM companies are onboarded.
+_KNOWN_PM_NAMES = ["Solari", "ConAm", "JSCO"]
+
+
 def _infer_pm_from_filename(filename: str) -> str:
+    fname_lower = filename.lower()
+    for pm in _KNOWN_PM_NAMES:
+        if pm.lower() in fname_lower:
+            return pm
     return os.path.splitext(filename)[0].replace("_", " ").replace("-", " ").strip()

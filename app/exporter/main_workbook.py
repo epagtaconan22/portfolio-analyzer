@@ -14,6 +14,72 @@ from app.exporter.styles import (
 from config import ECO_OCC_TARGET, KPI_FORMULAS
 
 
+# ─── Quarter helpers ─────────────────────────────────────────────────────────
+
+def _month_to_quarter(month: int) -> int:
+    """Return quarter number (1–4) for a given month (1–12)."""
+    return (month - 1) // 3 + 1
+
+
+def _quarter_label(year: int, quarter: int) -> str:
+    """Return display label, e.g. 'Q1 - 2025'."""
+    return f"Q{quarter} - {year}"
+
+
+def _get_sorted_quarters(kpis) -> list[tuple[int, int]]:
+    """Return sorted list of (year, quarter) tuples present in the KPI list."""
+    quarters: set[tuple[int, int]] = set()
+    for k in kpis:
+        quarters.add((k.year, _month_to_quarter(k.month)))
+    return sorted(quarters)
+
+
+def _kpis_for_quarter(kpis, year: int, quarter: int) -> list:
+    """Return KPI records belonging to the given year and quarter."""
+    months = {(quarter - 1) * 3 + 1, (quarter - 1) * 3 + 2, (quarter - 1) * 3 + 3}
+    return [k for k in kpis if k.year == year and k.month in months]
+
+
+# ─── Dashboard KPI row definitions ───────────────────────────────────────────
+# Each entry: (display_label, _aggregate()-dict-key, number_format)
+# None entries produce a blank separator row in the transposed table.
+
+_DASHBOARD_KPI_ROWS = [
+    ("Actual Income",       "actual_income",        CURRENCY_FMT),
+    ("Budget Income",       "budget_income",        CURRENCY_FMT),
+    ("Income Variance",     "income_variance",      CURRENCY_FMT),
+    ("Income Variance %",   "income_variance_pct",  PCT_FMT),
+    None,
+    ("Actual Expenses",     "actual_expenses",      CURRENCY_FMT),
+    ("Budget Expenses",     "budget_expenses",      CURRENCY_FMT),
+    ("Expense Variance",    "expense_variance",     CURRENCY_FMT),
+    ("Expense Variance %",  "expense_variance_pct", PCT_FMT),
+    None,
+    ("Actual NOI",          "actual_noi",           CURRENCY_FMT),
+    ("Budget NOI",          "budget_noi",           CURRENCY_FMT),
+    ("NOI Variance",        "noi_variance",         CURRENCY_FMT),
+    ("NOI Variance %",      "noi_variance_pct",     PCT_FMT),
+    None,
+    ("GPR",                 "gpr",                  CURRENCY_FMT),
+    ("Vacancy",             "vacancy",              CURRENCY_FMT),
+    ("Concessions",         "concessions",          CURRENCY_FMT),
+    ("Bad Debt",            "bad_debt",             CURRENCY_FMT),
+    ("Net Collectible",     "net_collectible",      CURRENCY_FMT),
+    ("Eco Occ %",           "eco_occ_pct",          PCT_FMT),
+    ("Budget Eco Occ %",    "budget_eco_occ_pct",   PCT_FMT),
+    ("Eco Occ Variance",    "eco_occ_variance",     PCT_FMT),
+    None,
+    ("Physical Occ %",      "physical_occ_pct",     PCT_FMT),
+    ("Leakage Gap",         "leakage_gap",          PCT_FMT),
+    None,
+    ("Income/Unit",         "income_per_unit",      CURRENCY_FMT),
+    ("Expense/Unit",        "expense_per_unit",     CURRENCY_FMT),
+    ("NOI/Unit",            "noi_per_unit",         CURRENCY_FMT),
+]
+
+
+# ─── Public entry point ───────────────────────────────────────────────────────
+
 def build_main_workbook(
     kpis: list[PropertyPeriodKPIs],
     portfolio_name: str,
@@ -32,65 +98,90 @@ def build_main_workbook(
     return output_path
 
 
+# ─── Dashboard ────────────────────────────────────────────────────────────────
+
 def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target):
     ws = wb.create_sheet("Dashboard")
 
     props = {k.property_name for k in kpis if not k.is_carveout}
     num_props = len(props)
 
+    # ── Quarter-period aggregates ────────────────────────────────────────────
+    quarters = _get_sorted_quarters(kpis)
+    period_labels = [_quarter_label(yr, q) for (yr, q) in quarters]
+    period_aggs: dict[str, dict] = {}
+    for (yr, q) in quarters:
+        q_kpis = [k for k in _kpis_for_quarter(kpis, yr, q) if not k.is_carveout]
+        period_aggs[_quarter_label(yr, q)] = _aggregate(q_kpis)
+
+    # ── Title ────────────────────────────────────────────────────────────────
     row = 1
     ws.cell(row, 1, f"{portfolio_name} — Portfolio Summary ({num_props} Properties)")
     ws.cell(row, 1).font = BOLD_FONT
     row += 2
 
-    summary_headers = [
-        "Period", "Actual Income", "Budget Income", "Income Variance", "Income Variance %",
-        "Actual Expenses", "Budget Expenses", "Expense Variance", "Expense Variance %",
-        "Actual NOI", "Budget NOI", "NOI Variance", "NOI Variance %",
-        "Eco Occ %", "Budget Eco Occ %", "Eco Occ Variance",
-        "Physical Occ %", "Leakage Gap",
-        "Income/Unit", "Expense/Unit", "NOI/Unit",
-    ]
-    for col_idx, hdr in enumerate(summary_headers, 1):
-        cell = ws.cell(row, col_idx, hdr)
-        add_kpi_comment(cell, hdr)
-    style_header_row(ws, row, len(summary_headers))
+    # ── Transposed KPI table: KPI label | Q1-2024 | Q2-2024 | ... ───────────
+    num_period_cols = len(period_labels)
+    total_cols = 1 + num_period_cols
+
+    # Header row
+    ws.cell(row, 1, "KPI")
+    for col_idx, lbl in enumerate(period_labels, 2):
+        cell = ws.cell(row, col_idx, lbl)
+        cell.alignment = Alignment(horizontal="center")
+    style_header_row(ws, row, total_cols)
     row += 1
 
-    years = sorted({k.year for k in kpis})
-    for yr in years:
-        yr_kpis = [k for k in kpis if k.year == yr and not k.is_carveout]
-        agg = _aggregate(yr_kpis)
-        _write_summary_row(ws, row, str(yr), agg, eco_occ_target)
+    # KPI data rows
+    for entry in _DASHBOARD_KPI_ROWS:
+        if entry is None:
+            row += 1
+            continue
+        label, key, fmt = entry
+        cell = ws.cell(row, 1, label)
+        add_kpi_comment(cell, label)
+        for col_idx, period_lbl in enumerate(period_labels, 2):
+            val = period_aggs[period_lbl].get(key)
+            c = ws.cell(row, col_idx, val)
+            if fmt:
+                c.number_format = fmt
         row += 1
 
     row += 2
 
+    # ── NOI Trend Commentary ─────────────────────────────────────────────────
     ws.cell(row, 1, "NOI Trend Commentary").font = BOLD_FONT
     row += 1
     commentary = _generate_noi_commentary(kpis)
     ws.cell(row, 1, commentary)
     ws.cell(row, 1).alignment = Alignment(wrap_text=True)
-    ws.column_dimensions["A"].width = 120
+    ws.column_dimensions["A"].width = 40
+    # Set period columns to a comfortable width
+    for col_idx in range(2, total_cols + 1):
+        ws.column_dimensions[get_column_letter(col_idx)].width = 16
     row += 3
 
+    # ── Top 5 Positive NOI Variance ──────────────────────────────────────────
     ws.cell(row, 1, f"Top Positive NOI Variances ({num_props} Properties Analyzed)").font = BOLD_FONT
     row += 1
     row = _write_top_noi_table(ws, kpis, row, top_n=5, favorable=True)
     row += 2
 
+    # ── Top 5 Negative NOI Variance ──────────────────────────────────────────
     ws.cell(row, 1, f"Top Negative NOI Variances ({num_props} Properties Analyzed)").font = BOLD_FONT
     row += 1
     row = _write_top_noi_table(ws, kpis, row, top_n=5, favorable=False)
     row += 2
 
+    # ── Properties Below Eco Occ Target ─────────────────────────────────────
     ws.cell(row, 1, f"Properties Below Economic Occupancy Target ({eco_occ_target:.0%})").font = BOLD_FONT
     row += 1
     _write_below_target_table(ws, kpis, row, eco_occ_target)
 
-    ws.freeze_panes = "B4"
-    _autofit_columns(ws)
+    # No frozen panes — different sections have different column layouts
 
+
+# ─── Property Analysis ────────────────────────────────────────────────────────
 
 def _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target):
     ws = wb.create_sheet("Property Analysis")
@@ -98,7 +189,7 @@ def _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target):
     num_props = len(props)
 
     headers = [
-        "Property", "Property Manager", "Total Units",
+        "Property", "Property Manager", "Period", "Total Units",
         "Actual Income", "Budget Income", "Income Variance", "Income Variance %",
         "Actual Expenses", "Budget Expenses", "Expense Variance", "Expense Variance %",
         "Actual NOI", "Budget NOI", "NOI Variance", "NOI Variance %",
@@ -108,7 +199,6 @@ def _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target):
         "Physical Occ %", "Leakage Gap",
         "Income/Unit", "Expense/Unit", "NOI/Unit",
         "Below Eco Occ Target?",
-        "Commentary",
     ]
     ws.cell(1, 1, f"{portfolio_name} — Property Analysis ({num_props} Properties)").font = BOLD_FONT
     for col_idx, hdr in enumerate(headers, 1):
@@ -116,12 +206,14 @@ def _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target):
         add_kpi_comment(cell, hdr)
     style_header_row(ws, 2, len(headers))
 
-    years = sorted({k.year for k in kpis})
+    quarters = _get_sorted_quarters(kpis)
     row = 3
-    for yr in years:
-        yr_kpis = [k for k in kpis if k.year == yr]
+    for (yr, q) in quarters:
+        period_lbl = _quarter_label(yr, q)
+        q_kpis = _kpis_for_quarter(kpis, yr, q)
+
         prop_groups: dict[str, list] = {}
-        for k in yr_kpis:
+        for k in q_kpis:
             prop_groups.setdefault(k.property_name, []).append(k)
 
         for prop_name in sorted(prop_groups):
@@ -130,7 +222,7 @@ def _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target):
             pm = group[0].pm_name
             is_below = (agg.get("eco_occ_pct") or 0) < eco_occ_target and agg.get("eco_occ_pct") is not None
             row_data = [
-                prop_name, pm, agg.get("total_units") or "Not Available",
+                prop_name, pm, period_lbl, agg.get("total_units") or "Not Available",
                 agg.get("actual_income"), agg.get("budget_income"),
                 agg.get("income_variance"), agg.get("income_variance_pct"),
                 agg.get("actual_expenses"), agg.get("budget_expenses"),
@@ -143,7 +235,6 @@ def _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target):
                 agg.get("physical_occ_pct"), agg.get("leakage_gap"),
                 agg.get("income_per_unit"), agg.get("expense_per_unit"), agg.get("noi_per_unit"),
                 "YES" if is_below else "no",
-                group[0].commentary,
             ]
             for col_idx, val in enumerate(row_data, 1):
                 ws.cell(row, col_idx, val)
@@ -154,6 +245,8 @@ def _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target):
     ws.auto_filter.ref = f"A2:{get_column_letter(len(headers))}2"
     _autofit_columns(ws)
 
+
+# ─── Property Monthly KPIs ────────────────────────────────────────────────────
 
 def _build_monthly_kpis(wb, kpis):
     ws = wb.create_sheet("Property Monthly KPIs")
@@ -223,7 +316,17 @@ def _c(ws, row, col, value, fmt):
 # ─── Aggregation ─────────────────────────────────────────────────────────────
 
 def _aggregate(kpis: list[PropertyPeriodKPIs]) -> dict:
-    """Sum/weight numeric KPI fields across a list of KPI records."""
+    """
+    Aggregate numeric KPI fields across a list of PropertyPeriodKPIs records.
+
+    Financial flows (income, expenses, GPR, etc.) are SUMMED — monthly amounts
+    accumulate to a period total.
+
+    Rate metrics (physical_occ_pct, eco_occ_pct) use a WEIGHTED approach:
+      physical_occ = Σ(occupied_units) / Σ(total_units) across matched months.
+    This avoids the >100% error that results from summing occupied_units and
+    dividing by a single month's total_units.
+    """
     def _sum(field):
         vals = [getattr(k, field) for k in kpis if getattr(k, field) is not None]
         return sum(vals) if vals else None
@@ -243,13 +346,25 @@ def _aggregate(kpis: list[PropertyPeriodKPIs]) -> dict:
     net_coll    = (gpr - (vacancy or 0) - (concessions or 0) - (bad_debt or 0)) if gpr is not None else None
     eco_occ     = (net_coll / gpr) if (net_coll is not None and gpr) else None
 
-    # Budget eco occ: weighted sum of budget components
-    bud_gpr     = _sum("gpr")  # approximation; full budget path uses budget-specific rows
-    bud_eco     = None
+    # Budget eco occ: average the per-month budget rates across the period
+    bud_eco_vals = [k.budget_eco_occ_pct for k in kpis if k.budget_eco_occ_pct is not None]
+    bud_eco      = sum(bud_eco_vals) / len(bud_eco_vals) if bud_eco_vals else None
+    eco_occ_var  = (eco_occ - bud_eco) if (eco_occ is not None and bud_eco is not None) else None
 
-    total_units = max((k.total_units or 0 for k in kpis), default=0) or None
-    occ_units   = _sum("occupied_units")
-    phys_occ    = (occ_units / total_units) if (occ_units is not None and total_units) else None
+    # Physical occ: Σ(occupied) / Σ(total) — correct time-weighted average.
+    # Using max(total_units) would produce values > 100% when aggregating multiple months.
+    _paired = [
+        (k.occupied_units, k.total_units)
+        for k in kpis
+        if k.occupied_units is not None and k.total_units is not None
+    ]
+    if _paired:
+        _occ_sum   = sum(p[0] for p in _paired)
+        _total_sum = sum(p[1] for p in _paired)
+        phys_occ   = _occ_sum / _total_sum if _total_sum > 0 else None
+    else:
+        phys_occ = None
+    total_units = next((k.total_units for k in kpis if k.total_units is not None), None)
 
     def _safe_div(a, b):
         return (a - b) if (a is not None and b is not None) else None
@@ -274,37 +389,14 @@ def _aggregate(kpis: list[PropertyPeriodKPIs]) -> dict:
         noi_variance=noi_var, noi_variance_pct=_safe_pct(noi_var, budget_noi),
         gpr=gpr, vacancy=vacancy, concessions=concessions, bad_debt=bad_debt,
         net_collectible=net_coll, eco_occ_pct=eco_occ, budget_eco_occ_pct=bud_eco,
-        eco_occ_variance=None,
-        total_units=total_units, occupied_units=occ_units, physical_occ_pct=phys_occ,
+        eco_occ_variance=eco_occ_var,
+        total_units=total_units, physical_occ_pct=phys_occ,
         leakage_gap=(phys_occ - eco_occ) if (phys_occ is not None and eco_occ is not None) else None,
         income_per_unit=income_pu, expense_per_unit=expense_pu, noi_per_unit=noi_pu,
     )
 
 
-# ─── Dashboard helpers ───────────────────────────────────────────────────────
-
-def _write_summary_row(ws, row, label, agg, eco_occ_target):
-    ws.cell(row, 1, label)
-    vals = [
-        agg.get("actual_income"), agg.get("budget_income"),
-        agg.get("income_variance"), agg.get("income_variance_pct"),
-        agg.get("actual_expenses"), agg.get("budget_expenses"),
-        agg.get("expense_variance"), agg.get("expense_variance_pct"),
-        agg.get("actual_noi"), agg.get("budget_noi"),
-        agg.get("noi_variance"), agg.get("noi_variance_pct"),
-        agg.get("eco_occ_pct"), agg.get("budget_eco_occ_pct"), agg.get("eco_occ_variance"),
-        agg.get("physical_occ_pct"), agg.get("leakage_gap"),
-        agg.get("income_per_unit"), agg.get("expense_per_unit"), agg.get("noi_per_unit"),
-    ]
-    currency_cols = {2, 3, 4, 6, 7, 8, 10, 11, 12, 19, 20, 21}
-    pct_cols      = {5, 9, 13, 14, 15, 16, 17}
-    for i, val in enumerate(vals, 2):
-        cell = ws.cell(row, i, val)
-        if i in currency_cols:
-            cell.number_format = CURRENCY_FMT
-        elif i in pct_cols:
-            cell.number_format = PCT_FMT
-
+# ─── Dashboard section helpers ────────────────────────────────────────────────
 
 def _write_top_noi_table(ws, kpis, start_row, top_n, favorable):
     headers = ["Rank", "Property", "PM", "Prior Year NOI", "Current Year NOI",
@@ -321,7 +413,6 @@ def _write_top_noi_table(ws, kpis, start_row, top_n, favorable):
 
     curr_yr, prev_yr = years[-1], years[-2]
 
-    # Aggregate each property's total NOI per year
     curr_by_prop: dict[str, float] = {}
     prev_by_prop: dict[str, float] = {}
     meta_by_prop: dict[str, PropertyPeriodKPIs] = {}

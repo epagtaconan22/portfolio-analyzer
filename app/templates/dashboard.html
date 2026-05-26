@@ -11,49 +11,47 @@
   </a>
 </div>
 
-<!-- Portfolio Summary -->
+<!-- Portfolio Summary — transposed: KPI labels as rows, quarter-periods as columns -->
 <section class="card">
   <h2>Portfolio Summary &mdash; {{ num_properties }} Properties</h2>
   <div class="table-scroll">
-  <table class="kpi-table">
+  <table class="kpi-table kpi-transposed">
     <thead>
       <tr>
-        <th>Period</th>
-        <th title="Total Income = GPR + Other Income − Vacancy − Concessions − Bad Debt">Actual Income</th>
-        <th title="Budgeted Total Income">Budget Income</th>
-        <th title="Actual Income − Budget Income">Income Var</th>
-        <th title="Sum of all Operating Expense accounts">Actual Expenses</th>
-        <th title="Budgeted Operating Expenses">Budget Expenses</th>
-        <th title="NOI = Total Income − Total Expenses">Actual NOI</th>
-        <th title="Budget NOI = Budget Income − Budget Expenses">Budget NOI</th>
-        <th title="NOI Variance = Actual NOI − Budget NOI">NOI Var</th>
-        <th title="NOI Variance / |Budget NOI|">NOI Var %</th>
-        <th title="Net Collectible / GPR">Eco Occ %</th>
-        <th title="Occupied Units / Total Units">Phys Occ %</th>
-        <th title="Physical Occ % − Economic Occ %">Leakage Gap</th>
-        <th title="Actual Income / Total Units">Income/Unit</th>
-        <th title="Actual NOI / Total Units">NOI/Unit</th>
+        <th class="kpi-label-col">KPI</th>
+        {% for lbl in period_labels %}
+        <th>{{ lbl }}</th>
+        {% endfor %}
       </tr>
     </thead>
     <tbody>
-      {% for r in summary_rows %}
+      {% for row in summary_kpi_rows %}
+      {% if row.sep %}
+      <tr class="kpi-sep"><td colspan="{{ period_labels|length + 1 }}"></td></tr>
+      {% else %}
       <tr>
-        <td><strong>{{ r.year }}</strong></td>
-        <td class="currency">{{ r.actual_income | currency }}</td>
-        <td class="currency">{{ r.budget_income | currency }}</td>
-        <td class="currency {{ 'pos' if (r.income_variance or 0) >= 0 else 'neg' }}">{{ r.income_variance | currency }}</td>
-        <td class="currency">{{ r.actual_expenses | currency }}</td>
-        <td class="currency">{{ r.budget_expenses | currency }}</td>
-        <td class="currency">{{ r.actual_noi | currency }}</td>
-        <td class="currency">{{ r.budget_noi | currency }}</td>
-        <td class="currency {{ 'pos' if (r.noi_variance or 0) >= 0 else 'neg' }}">{{ r.noi_variance | currency }}</td>
-        <td class="pct {{ 'pos' if (r.noi_variance_pct or 0) >= 0 else 'neg' }}">{{ r.noi_variance_pct | pct }}</td>
-        <td class="pct">{{ r.eco_occ_pct | pct }}</td>
-        <td class="pct">{{ r.physical_occ_pct | pct }}</td>
-        <td class="pct {{ 'neg' if (r.leakage_gap or 0) > 0 else '' }}">{{ r.leakage_gap | pct }}</td>
-        <td class="currency">{{ r.income_per_unit | currency }}</td>
-        <td class="currency">{{ r.noi_per_unit | currency }}</td>
+        <td class="kpi-label" title="{{ row.tooltip }}">{{ row.label }}</td>
+        {% for val in row.period_values %}
+        {%- set fav = row.favorable_positive -%}
+        {%- if fav is not none -%}
+          {%- if fav -%}
+            {%- set color_cls = 'pos' if (val or 0) >= 0 else 'neg' -%}
+          {%- else -%}
+            {%- set color_cls = 'neg' if (val or 0) > 0 else ('pos' if (val or 0) < 0 else '') -%}
+          {%- endif -%}
+        {%- else -%}
+          {%- set color_cls = '' -%}
+        {%- endif -%}
+        <td class="{% if row.fmt == 'currency' %}currency{% else %}pct{% endif %} {{ color_cls }}">
+          {%- if row.fmt == 'currency' -%}
+            {{ val | currency }}
+          {%- else -%}
+            {{ val | pct }}
+          {%- endif -%}
+        </td>
+        {% endfor %}
       </tr>
+      {% endif %}
       {% endfor %}
     </tbody>
   </table>
