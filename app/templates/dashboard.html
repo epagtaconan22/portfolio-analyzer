@@ -1,6 +1,19 @@
 {% extends "base.html" %}
 {% block title %}{{ portfolio_name }} Dashboard{% endblock %}
 {% block content %}
+{% macro kpi_value_cell(val, fmt, fav) %}
+  {%- set color_cls = '' -%}
+  {%- if fav is not none -%}
+    {%- if fav -%}
+      {%- set color_cls = 'pos' if (val or 0) >= 0 else 'neg' -%}
+    {%- else -%}
+      {%- set color_cls = 'neg' if (val or 0) > 0 else ('pos' if (val or 0) < 0 else '') -%}
+    {%- endif -%}
+  {%- endif -%}
+  <td class="{% if fmt == 'currency' %}currency{% else %}pct{% endif %} {{ color_cls }}">
+    {%- if fmt == 'currency' -%}{{ val | currency }}{%- else -%}{{ val | pct }}{%- endif -%}
+  </td>
+{% endmacro %}
 <div class="page-header">
   <div>
     <h1>{{ portfolio_name }}</h1>
@@ -28,28 +41,21 @@
       {% for row in summary_kpi_rows %}
       {% if row.sep %}
       <tr class="kpi-sep"><td colspan="{{ period_labels|length + 1 }}"></td></tr>
+      {% elif row.is_group_header %}
+      <tr class="kpi-group-header" data-group="{{ row.group_id }}"
+          onclick="toggleKpiGroup('{{ row.group_id }}')">
+        <td class="kpi-label" title="{{ row.tooltip }}">{{ row.label }}</td>
+        {% for val in row.period_values %}{{ kpi_value_cell(val, row.fmt, row.favorable_positive) }}{% endfor %}
+      </tr>
+      {% elif row.is_group_child %}
+      <tr class="kpi-group-child" data-parent="{{ row.group_id }}">
+        <td class="kpi-label" title="{{ row.tooltip }}">{{ row.label }}</td>
+        {% for val in row.period_values %}{{ kpi_value_cell(val, row.fmt, row.favorable_positive) }}{% endfor %}
+      </tr>
       {% else %}
       <tr>
         <td class="kpi-label" title="{{ row.tooltip }}">{{ row.label }}</td>
-        {% for val in row.period_values %}
-        {%- set fav = row.favorable_positive -%}
-        {%- if fav is not none -%}
-          {%- if fav -%}
-            {%- set color_cls = 'pos' if (val or 0) >= 0 else 'neg' -%}
-          {%- else -%}
-            {%- set color_cls = 'neg' if (val or 0) > 0 else ('pos' if (val or 0) < 0 else '') -%}
-          {%- endif -%}
-        {%- else -%}
-          {%- set color_cls = '' -%}
-        {%- endif -%}
-        <td class="{% if row.fmt == 'currency' %}currency{% else %}pct{% endif %} {{ color_cls }}">
-          {%- if row.fmt == 'currency' -%}
-            {{ val | currency }}
-          {%- else -%}
-            {{ val | pct }}
-          {%- endif -%}
-        </td>
-        {% endfor %}
+        {% for val in row.period_values %}{{ kpi_value_cell(val, row.fmt, row.favorable_positive) }}{% endfor %}
       </tr>
       {% endif %}
       {% endfor %}
@@ -251,4 +257,23 @@
   </table>
 </section>
 {% endif %}
+
+<script>
+function toggleKpiGroup(groupId) {
+  var header = document.querySelector('[data-group="' + groupId + '"]');
+  var children = document.querySelectorAll('[data-parent="' + groupId + '"]');
+  var isOpen = header.classList.contains('open');
+  if (isOpen) {
+    header.classList.remove('open');
+    for (var i = 0; i < children.length; i++) {
+      children[i].style.display = '';
+    }
+  } else {
+    header.classList.add('open');
+    for (var i = 0; i < children.length; i++) {
+      children[i].style.display = 'table-row';
+    }
+  }
+}
+</script>
 {% endblock %}

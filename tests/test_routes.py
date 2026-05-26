@@ -134,3 +134,22 @@ def test_summary_kpi_rows_have_group_metadata(client):
     )
     assert resp.status_code == 200
     assert b"Portfolio Summary" in resp.data
+
+
+def test_dashboard_renders_collapsible_kpi_groups(client):
+    """Dashboard HTML includes group-header and group-child row classes."""
+    wb_bytes = _make_workbook_bytes()
+    resp = client.post(
+        "/",
+        data={
+            "portfolio_name": "Collapsible Test",
+            "eco_occ_target": "95",
+            "financial_files": (io.BytesIO(wb_bytes), "test_financial.xlsx"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert b"kpi-group-header" in resp.data
+    assert b"kpi-group-child" in resp.data
+    assert b"toggleKpiGroup" in resp.data
