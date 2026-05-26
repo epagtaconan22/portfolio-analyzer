@@ -34,36 +34,38 @@ _KPI_TOOLTIPS = {
 }
 
 _SUMMARY_KPI_DEFINITIONS = [
-    ("Actual Income",      "actual_income",        "currency", None),
-    ("Budget Income",      "budget_income",        "currency", None),
-    ("Income Variance",    "income_variance",      "currency", True),
-    ("Income Variance %",  "income_variance_pct",  "pct",      True),
+    # (label, key, fmt, favorable_positive, group_id, is_group_header)
+    ("Actual Income",      "actual_income",        "currency", None,  "group_income",   True),
+    ("Budget Income",      "budget_income",        "currency", None,  "group_income",   False),
+    ("Income Variance",    "income_variance",      "currency", True,  "group_income",   False),
+    ("Income Variance %",  "income_variance_pct",  "pct",      True,  "group_income",   False),
     None,
-    ("Actual Expenses",    "actual_expenses",      "currency", None),
-    ("Budget Expenses",    "budget_expenses",      "currency", None),
-    ("Expense Variance",   "expense_variance",     "currency", False),
-    ("Expense Variance %", "expense_variance_pct", "pct",      False),
+    ("Actual Expenses",    "actual_expenses",      "currency", None,  "group_expenses", True),
+    ("Budget Expenses",    "budget_expenses",      "currency", None,  "group_expenses", False),
+    ("Expense Variance",   "expense_variance",     "currency", False, "group_expenses", False),
+    ("Expense Variance %", "expense_variance_pct", "pct",      False, "group_expenses", False),
     None,
-    ("Actual NOI",         "actual_noi",           "currency", None),
-    ("Budget NOI",         "budget_noi",           "currency", None),
-    ("NOI Variance",       "noi_variance",         "currency", True),
-    ("NOI Variance %",     "noi_variance_pct",     "pct",      True),
+    ("Actual NOI",         "actual_noi",           "currency", None,  "group_noi",      True),
+    ("Budget NOI",         "budget_noi",           "currency", None,  "group_noi",      False),
+    ("NOI Variance",       "noi_variance",         "currency", True,  "group_noi",      False),
+    ("NOI Variance %",     "noi_variance_pct",     "pct",      True,  "group_noi",      False),
     None,
-    ("GPR",                "gpr",                  "currency", None),
-    ("Vacancy",            "vacancy",              "currency", None),
-    ("Concessions",        "concessions",          "currency", None),
-    ("Bad Debt",           "bad_debt",             "currency", None),
-    ("Net Collectible",    "net_collectible",      "currency", None),
-    ("Eco Occ %",          "eco_occ_pct",          "pct",      None),
-    ("Budget Eco Occ %",   "budget_eco_occ_pct",   "pct",      None),
-    ("Eco Occ Variance",   "eco_occ_variance",     "pct",      True),
+    ("GPR",                "gpr",                  "currency", None,  "group_gpr",      True),
+    ("Vacancy",            "vacancy",              "currency", None,  "group_gpr",      False),
+    ("Concessions",        "concessions",          "currency", None,  "group_gpr",      False),
+    ("Bad Debt",           "bad_debt",             "currency", None,  "group_gpr",      False),
+    ("Net Collectible",    "net_collectible",      "currency", None,  "group_gpr",      False),
+    None,                                                              # NEW — divider before Eco Occ %
+    ("Eco Occ %",          "eco_occ_pct",          "pct",      None,  "group_eco_occ",  True),
+    ("Budget Eco Occ %",   "budget_eco_occ_pct",   "pct",      None,  "group_eco_occ",  False),
+    ("Eco Occ Variance",   "eco_occ_variance",     "pct",      True,  "group_eco_occ",  False),
+    # divider removed here — Physical Occ % and Leakage Gap join the eco occ section
+    ("Physical Occ %",     "physical_occ_pct",     "pct",      None,  None,             False),
+    ("Leakage Gap",        "leakage_gap",          "pct",      False, None,             False),
     None,
-    ("Physical Occ %",     "physical_occ_pct",     "pct",      None),
-    ("Leakage Gap",        "leakage_gap",          "pct",      False),
-    None,
-    ("Income/Unit",        "income_per_unit",      "currency", None),
-    ("Expense/Unit",       "expense_per_unit",     "currency", None),
-    ("NOI/Unit",           "noi_per_unit",         "currency", None),
+    ("Income/Unit",        "income_per_unit",      "currency", None,  None,             False),
+    ("Expense/Unit",       "expense_per_unit",     "currency", None,  None,             False),
+    ("NOI/Unit",           "noi_per_unit",         "currency", None,  None,             False),
 ]
 
 
@@ -281,16 +283,20 @@ def show(run_id):
         if defn is None:
             summary_kpi_rows.append({"sep": True})
             continue
-        label, key, fmt, fav = defn
+        label, key, fmt, fav, group_id, is_group_header = defn
+        is_group_child = group_id is not None and not is_group_header
         values = [period_aggs.get(lbl, {}).get(key) for lbl in period_labels]
         summary_kpi_rows.append({
-            "sep": False,
-            "label": label,
-            "key": key,
-            "fmt": fmt,
+            "sep":               False,
+            "label":             label,
+            "key":               key,
+            "fmt":               fmt,
             "favorable_positive": fav,
-            "tooltip": _KPI_TOOLTIPS.get(label, ""),
-            "period_values": values,
+            "tooltip":           _KPI_TOOLTIPS.get(label, ""),
+            "period_values":     values,
+            "group_id":          group_id,
+            "is_group_header":   is_group_header,
+            "is_group_child":    is_group_child,
         })
 
     # ── Property table ─────────────────────────────────────────────────────────

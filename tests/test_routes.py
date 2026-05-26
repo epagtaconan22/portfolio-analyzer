@@ -117,3 +117,20 @@ def test_download_endpoint(client):
 def test_invalid_run_id_404(client):
     resp = client.get("/results/nonexistent_run_id_xyz")
     assert resp.status_code == 404
+
+
+def test_summary_kpi_rows_have_group_metadata(client):
+    """Route builds summary_kpi_rows with group fields — no crash on 6-tuple definitions."""
+    wb_bytes = _make_workbook_bytes()
+    resp = client.post(
+        "/",
+        data={
+            "portfolio_name": "Group Meta Test",
+            "eco_occ_target": "95",
+            "financial_files": (io.BytesIO(wb_bytes), "test_financial.xlsx"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert b"Portfolio Summary" in resp.data
