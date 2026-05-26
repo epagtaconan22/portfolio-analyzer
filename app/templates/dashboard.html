@@ -67,13 +67,17 @@
       <tr>
         <th>Property</th>
         <th>PM</th>
+        <th title="Total Units from Physical Occupancy Report">Total Units</th>
         <th title="Actual Income">Income</th>
+        <th title="Actual Income / Total Units">Income/Unit</th>
+        <th title="Actual Expenses">Expenses</th>
+        <th title="Actual Expenses / Total Units">Expense/Unit</th>
         <th title="Actual NOI = Income − Expenses">NOI</th>
+        <th title="Actual NOI / Total Units">NOI/Unit</th>
         <th title="NOI Variance = Actual − Budget">NOI Var</th>
         <th title="Economic Occ % = Net Collectible / GPR">Eco Occ %</th>
         <th title="Physical Occ % from occupancy report">Phys Occ %</th>
         <th title="Physical Occ % − Economic Occ %">Leakage</th>
-        <th title="NOI / Total Units">NOI/Unit</th>
         <th>Detail</th>
       </tr>
     </thead>
@@ -82,13 +86,17 @@
       <tr>
         <td>{{ r.property_name }}</td>
         <td>{{ r.pm_name }}</td>
+        <td>{{ r.total_units }}</td>
         <td class="currency">{{ r.actual_income | currency }}</td>
+        <td class="currency">{{ r.income_per_unit | currency }}</td>
+        <td class="currency">{{ r.actual_expenses | currency }}</td>
+        <td class="currency">{{ r.expense_per_unit | currency }}</td>
         <td class="currency">{{ r.actual_noi | currency }}</td>
+        <td class="currency">{{ r.noi_per_unit | currency }}</td>
         <td class="currency {{ 'pos' if (r.noi_variance or 0) >= 0 else 'neg' }}">{{ r.noi_variance | currency }}</td>
         <td class="pct {% if r.eco_occ_pct is not none and r.eco_occ_pct < eco_occ_target %}neg{% endif %}">{{ r.eco_occ_pct | pct }}</td>
         <td class="pct">{{ r.physical_occ_pct | pct }}</td>
         <td class="pct {{ 'neg' if (r.leakage_gap or 0) > 0 else '' }}">{{ r.leakage_gap | pct }}</td>
-        <td class="currency">{{ r.noi_per_unit | currency }}</td>
         <td><a href="{{ url_for('property_detail.show', run_id=run_id, property_name=r.property_name) }}">View</a></td>
       </tr>
       {% endfor %}
