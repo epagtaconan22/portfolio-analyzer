@@ -343,12 +343,12 @@ def show(run_id):
                                  "prepayments_delta": None,
                                  "pct_overdue_delta": None}
                     cols.append({
-                        "type":         "yoy",
-                        "label":        "YoY Δ",
+                        "type":                "yoy",
+                        "label":               "YoY Δ",
                         "year": yr, "month": mo,
-                        "current_owed": delta["current_owed_delta"],
-                        "prepayments":  delta["prepayments_delta"],
-                        "pct_overdue":  delta["pct_overdue_delta"],
+                        "current_owed_delta":  delta["current_owed_delta"],
+                        "prepayments_delta":   delta["prepayments_delta"],
+                        "pct_overdue_delta":   delta["pct_overdue_delta"],
                     })
 
             prop_count = len({r["property_name"] for r in ar_rows
@@ -379,11 +379,11 @@ def show(run_id):
                 "tr_current_owed":  tr_curr["current_owed"]  if tr_curr else None,
                 "tr_prepayments":   tr_curr["prepayments"]   if tr_curr else None,
                 "tr_pct_overdue":   tr_curr["pct_overdue"]   if tr_curr else None,
-                "tr_yoy_pct_delta": _pct_delta(tr_curr, tr_prev),
+                "tr_yoy_pct_overdue_delta": _pct_delta(tr_curr, tr_prev),
                 "sub_current_owed":  sub_curr["current_owed"]  if sub_curr else None,
                 "sub_prepayments":   sub_curr["prepayments"]   if sub_curr else None,
                 "sub_pct_overdue":   sub_curr["pct_overdue"]   if sub_curr else None,
-                "sub_yoy_pct_delta": _pct_delta(sub_curr, sub_prev),
+                "sub_yoy_pct_overdue_delta": _pct_delta(sub_curr, sub_prev),
             })
 
         # Sort by Tenant Rent current_owed descending
