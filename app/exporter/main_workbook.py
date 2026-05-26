@@ -4,7 +4,7 @@ import os
 from typing import Optional
 import openpyxl
 from openpyxl.utils import get_column_letter
-from openpyxl.styles import Alignment
+from openpyxl.styles import Alignment, Font, PatternFill
 from app.models import PropertyPeriodKPIs
 from app.exporter.styles import (
     style_header_row, add_kpi_comment, apply_variance_fill,
@@ -12,6 +12,8 @@ from app.exporter.styles import (
     SUBHDR_FILL, SUBHEADER_FONT,
 )
 from config import ECO_OCC_TARGET, KPI_FORMULAS
+
+_GROUP_PARENTS = {"Actual Income", "Actual Expenses", "Actual NOI", "GPR", "Eco Occ %"}
 
 _AR_MONTH_ABBR = {
     1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
@@ -100,7 +102,7 @@ def build_main_workbook(
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
 
-    _build_dashboard(wb, kpis, portfolio_name, eco_occ_target)
+    _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=ar_rows)
     _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target)
     _build_monthly_kpis(wb, kpis)
     _build_ar_aging(wb, ar_rows or [], portfolio_name)
@@ -111,8 +113,11 @@ def build_main_workbook(
 
 # ─── Dashboard ────────────────────────────────────────────────────────────────
 
-def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target):
+def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None):
     ws = wb.create_sheet("Dashboard")
+
+    from openpyxl.worksheet.properties import Outline
+    ws.sheet_properties.outlinePr = Outline(summaryBelow=False, summaryRight=False)
 
     props = {k.property_name for k in kpis if not k.is_carveout}
     num_props = len(props)
@@ -133,15 +138,20 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target):
 
     # ── Transposed KPI table: KPI label | Q1-2024 | Q2-2024 | ... ───────────
     num_period_cols = len(period_labels)
-    total_cols = 1 + num_period_cols
+    total_kpi_cols = 1 + num_period_cols
 
     # Header row
+    kpi_header_row = row
     ws.cell(row, 1, "KPI")
     for col_idx, lbl in enumerate(period_labels, 2):
         cell = ws.cell(row, col_idx, lbl)
         cell.alignment = Alignment(horizontal="center")
-    style_header_row(ws, row, total_cols)
+    style_header_row(ws, row, total_kpi_cols)
     row += 1
+
+    _PARENT_FILL = PatternFill("solid", fgColor="2E75B6")
+    _PARENT_FONT = Font(bold=True, color="FFFFFF", size=10)
+    _NON_GROUPED = {"Physical Occ %", "Leakage Gap", "Income/Unit", "Expense/Unit", "NOI/Unit"}
 
     # KPI data rows
     for entry in _DASHBOARD_KPI_ROWS:
@@ -156,21 +166,47 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target):
             c = ws.cell(row, col_idx, val)
             if fmt:
                 c.number_format = fmt
+
+        if label in _GROUP_PARENTS:
+            for col_idx in range(1, total_kpi_cols + 1):
+                gc = ws.cell(row, col_idx)
+                gc.fill = _PARENT_FILL
+                gc.font = _PARENT_FONT
+        elif label not in _NON_GROUPED:
+            ws.row_dimensions[row].outline_level = 1
+            ws.row_dimensions[row].hidden = True
+
         row += 1
+
+    kpi_end_row = row - 1
+
+    # ── Portfolio Summary (right of KPI table, merged cells) ─────────────────
+    summary_start_col = total_kpi_cols + 2
+    summary_end_col = total_kpi_cols + 7
+
+    ws.merge_cells(
+        start_row=kpi_header_row, start_column=summary_start_col,
+        end_row=kpi_header_row, end_column=summary_end_col,
+    )
+    hdr_cell = ws.cell(kpi_header_row, summary_start_col, "Portfolio Summary")
+    hdr_cell.fill = PatternFill("solid", fgColor="1F4E79")
+    hdr_cell.font = Font(bold=True, color="FFFFFF", size=11)
+
+    ws.merge_cells(
+        start_row=kpi_header_row + 1, start_column=summary_start_col,
+        end_row=kpi_end_row, end_column=summary_end_col,
+    )
+    summary_text = _generate_portfolio_summary(kpis, eco_occ_target)
+    txt_cell = ws.cell(kpi_header_row + 1, summary_start_col, summary_text)
+    txt_cell.alignment = Alignment(wrap_text=True, vertical="top", horizontal="left")
+    txt_cell.font = Font(name="Arial", size=10, color="000000")
 
     row += 2
 
-    # ── NOI Trend Commentary ─────────────────────────────────────────────────
-    ws.cell(row, 1, "NOI Trend Commentary").font = BOLD_FONT
-    row += 1
-    commentary = _generate_noi_commentary(kpis)
-    ws.cell(row, 1, commentary)
-    ws.cell(row, 1).alignment = Alignment(wrap_text=True)
-    ws.column_dimensions["A"].width = 40
-    # Set period columns to a comfortable width
-    for col_idx in range(2, total_cols + 1):
-        ws.column_dimensions[get_column_letter(col_idx)].width = 16
-    row += 3
+    # ── Portfolio AR Aging Summary ───────────────────────────────────────────
+    row = _write_dashboard_ar_summary(ws, ar_rows, portfolio_name, row)
+    if ar_rows:
+        row += 1
 
     # ── Top 5 Positive NOI Variance ──────────────────────────────────────────
     ws.cell(row, 1, f"Top Positive NOI Variances ({num_props} Properties Analyzed)").font = BOLD_FONT
@@ -188,6 +224,14 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target):
     ws.cell(row, 1, f"Properties Below Economic Occupancy Target ({eco_occ_target:.0%})").font = BOLD_FONT
     row += 1
     _write_below_target_table(ws, kpis, row, eco_occ_target)
+
+    # ── Column widths ────────────────────────────────────────────────────────
+    ws.column_dimensions["A"].width = 28
+    for col_idx in range(2, total_kpi_cols + 1):
+        ws.column_dimensions[get_column_letter(col_idx)].width = 16
+    ws.column_dimensions[get_column_letter(total_kpi_cols + 1)].width = 4
+    for col_idx in range(summary_start_col, summary_end_col + 1):
+        ws.column_dimensions[get_column_letter(col_idx)].width = 18
 
     # No frozen panes — different sections have different column layouts
 
@@ -462,43 +506,80 @@ def _write_top_noi_table(ws, kpis, start_row, top_n, favorable):
     return row
 
 
+def _eco_occ_drivers(agg: dict) -> tuple[str, str]:
+    components = [
+        (agg.get("vacancy") or 0,     "Vacancy"),
+        (agg.get("concessions") or 0, "Concessions"),
+        (agg.get("bad_debt") or 0,    "Bad Debt"),
+    ]
+    # Sort by absolute dollar amount descending
+    components.sort(key=lambda x: abs(x[0]), reverse=True)
+    def fmt(amt, name):
+        return f"{name} (${abs(amt):,.0f})" if amt else name
+    d1 = fmt(components[0][0], components[0][1]) if components else ""
+    d2 = fmt(components[1][0], components[1][1]) if len(components) > 1 else ""
+    return d1, d2
+
+
 def _write_below_target_table(ws, kpis, start_row, eco_occ_target):
+    quarters = _get_sorted_quarters(kpis)
+    if not quarters:
+        ws.cell(start_row + 1, 1, "No data available.")
+        return start_row + 2
+
+    latest_q_yr, latest_q = quarters[-1]
+    q_kpis = _kpis_for_quarter(kpis, latest_q_yr, latest_q)
+
+    # Aggregate per property for this quarter
+    prop_groups: dict = {}
+    for k in q_kpis:
+        prop_groups.setdefault(k.property_name, []).append(k)
+
+    below = []
+    for prop, pklist in prop_groups.items():
+        agg = _aggregate(pklist)
+        pm = pklist[0].pm_name
+        if agg.get("eco_occ_pct") is not None and agg["eco_occ_pct"] < eco_occ_target:
+            below.append((agg["eco_occ_pct"], prop, pm, agg))
+
+    below.sort(key=lambda x: x[0])  # worst first
+
     headers = ["Property", "PM", "Eco Occ %", "Target", "Variance to Target",
-               "Driver 1", "Driver 2", "Commentary"]
+               "Driver 1", "Driver 2"]
     for col, h in enumerate(headers, 1):
         ws.cell(start_row, col, h)
     style_header_row(ws, start_row, len(headers), fill=SUBHDR_FILL, font=SUBHEADER_FONT)
     row = start_row + 1
 
-    below = [k for k in kpis if k.eco_occ_pct is not None and k.eco_occ_pct < eco_occ_target]
-    below.sort(key=lambda k: k.eco_occ_pct or 1)
-    for k in below:
-        ws.cell(row, 1, k.property_name)
-        ws.cell(row, 2, k.pm_name)
-        _c(ws, row, 3, k.eco_occ_pct, PCT_FMT)
+    for eco_occ, prop, pm, agg in below:
+        d1, d2 = _eco_occ_drivers(agg)
+        ws.cell(row, 1, prop)
+        ws.cell(row, 2, pm)
+        _c(ws, row, 3, eco_occ, PCT_FMT)
         _c(ws, row, 4, eco_occ_target, PCT_FMT)
-        _c(ws, row, 5, (k.eco_occ_pct or 0) - eco_occ_target, PCT_FMT)
-        ws.cell(row, 6, k.top_eco_occ_driver_1)
-        ws.cell(row, 7, k.top_eco_occ_driver_2)
-        ws.cell(row, 8, k.commentary)
+        _c(ws, row, 5, eco_occ - eco_occ_target, PCT_FMT)
+        ws.cell(row, 6, d1)
+        ws.cell(row, 7, d2)
         row += 1
+
     if row == start_row + 1:
         ws.cell(row, 1, f"All properties at or above {eco_occ_target:.0%} target")
+        row += 1
     return row
 
 
-def _generate_noi_commentary(kpis: list[PropertyPeriodKPIs]) -> str:
-    """Rule-based template commentary for portfolio NOI trend."""
+def _generate_portfolio_summary(kpis: list, eco_occ_target: float) -> str:
+    """Generate a comprehensive 5-6 sentence portfolio summary."""
     years = sorted({k.year for k in kpis})
     if len(years) < 2:
         yr = years[0] if years else "N/A"
         total_noi = sum(k.actual_noi or 0 for k in kpis)
-        return (
-            f"Portfolio NOI for {yr} totaled ${total_noi:,.0f}. "
-            "Prior year data not available for trend comparison."
-        )
+        return (f"Portfolio NOI for {yr} totaled ${total_noi:,.0f}. "
+                "Prior year data not available for trend comparison.")
 
     curr_yr, prev_yr = years[-1], years[-2]
+
+    # YoY aggregates
     curr_noi = sum(k.actual_noi or 0 for k in kpis if k.year == curr_yr)
     prev_noi = sum(k.actual_noi or 0 for k in kpis if k.year == prev_yr)
     curr_inc = sum(k.actual_income or 0 for k in kpis if k.year == curr_yr)
@@ -511,31 +592,165 @@ def _generate_noi_commentary(kpis: list[PropertyPeriodKPIs]) -> str:
     noi_pct = noi_var / abs(prev_noi) * 100 if prev_noi else 0
     inc_var = curr_inc - prev_inc
     exp_var = curr_exp - prev_exp
-    primary_driver = "income" if abs(inc_var) >= abs(exp_var) else "expenses"
+    primary_driver = "income" if abs(inc_var) >= abs(exp_var) else "expense"
+    driver_dir = "favorable" if (primary_driver == "income" and inc_var >= 0) or (primary_driver == "expense" and exp_var <= 0) else "unfavorable"
 
-    curr_by_prop = {k.property_name: sum(x.actual_noi or 0 for x in kpis if x.year == curr_yr and x.property_name == k.property_name) for k in kpis if k.year == curr_yr}
-    prev_by_prop = {k.property_name: sum(x.actual_noi or 0 for x in kpis if x.year == prev_yr and x.property_name == k.property_name) for k in kpis if k.year == prev_yr}
-    prop_vars = {p: curr_by_prop.get(p, 0) - prev_by_prop.get(p, 0) for p in curr_by_prop}
-    outlier = max(prop_vars, key=lambda p: abs(prop_vars[p])) if prop_vars else None
-    outlier_share = abs(prop_vars[outlier]) / abs(noi_var) * 100 if (outlier and noi_var) else 0
+    # Per-property YoY NOI variances
+    curr_by_prop: dict = {}
+    prev_by_prop: dict = {}
+    for k in kpis:
+        if k.actual_noi is None:
+            continue
+        if k.year == curr_yr:
+            curr_by_prop[k.property_name] = curr_by_prop.get(k.property_name, 0) + k.actual_noi
+        elif k.year == prev_yr:
+            prev_by_prop[k.property_name] = prev_by_prop.get(k.property_name, 0) + k.actual_noi
 
-    commentary = (
-        f"Portfolio NOI {noi_dir} by ${abs(noi_var):,.0f} ({abs(noi_pct):.1f}%) "
-        f"from {prev_yr} to {curr_yr}, primarily driven by "
-        f"{'favorable' if inc_var >= 0 else 'unfavorable'} {primary_driver} trends. "
+    prop_vars = sorted(
+        [(curr_by_prop[p] - prev_by_prop[p], p)
+         for p in curr_by_prop if p in prev_by_prop],
+        key=lambda x: x[0], reverse=True
     )
-    if outlier and outlier_share > 20:
-        commentary += (
-            f"{outlier} accounted for {outlier_share:.0f}% of the total NOI variance "
-            f"(${prop_vars[outlier]:+,.0f}), suggesting this property-specific trend "
-            "materially impacted portfolio results."
-        )
+    top5_pos = prop_vars[:5]
+    top5_neg = list(reversed(prop_vars[-5:])) if len(prop_vars) >= 5 else list(reversed(prop_vars))
+    top5_neg = [x for x in top5_neg if x[0] < 0]
+
+    # Latest quarter: properties below eco occ target + leakage
+    quarters = _get_sorted_quarters(kpis)
+    n_below = 0
+    top5_leakage = []
+    latest_q_label = ""
+    if quarters:
+        latest_q_yr, latest_q = quarters[-1]
+        latest_q_label = f"Q{latest_q} {latest_q_yr}"
+        q_kpis = _kpis_for_quarter(kpis, latest_q_yr, latest_q)
+        prop_groups: dict = {}
+        for k in q_kpis:
+            prop_groups.setdefault(k.property_name, []).append(k)
+        leakage_data = []
+        for prop, pklist in prop_groups.items():
+            agg = _aggregate(pklist)
+            if agg.get("eco_occ_pct") is not None and agg["eco_occ_pct"] < eco_occ_target:
+                n_below += 1
+            if agg.get("leakage_gap") is not None and agg["leakage_gap"] > 0:
+                leakage_data.append((agg["leakage_gap"], prop))
+        leakage_data.sort(reverse=True)
+        top5_leakage = leakage_data[:5]
+
+    # Build sentences
+    s1 = (f"Portfolio NOI {noi_dir} by ${abs(noi_var):,.0f} ({abs(noi_pct):.1f}%) from {prev_yr} to {curr_yr}, "
+          f"primarily driven by {driver_dir} {primary_driver} trends "
+          f"(income {'+' if inc_var >= 0 else ''}{inc_var:,.0f}, expenses {'+' if exp_var >= 0 else ''}{exp_var:,.0f} YoY).")
+
+    if top5_pos:
+        pos_list = ", ".join(f"{p} (${v:+,.0f})" for v, p in top5_pos)
+        s2 = f"Top 5 positive NOI variances: {pos_list}."
     else:
-        commentary += (
-            "The variance appears broadly distributed across the portfolio "
-            "with no single property dominating the trend."
+        s2 = "No properties showed positive NOI variance year-over-year."
+
+    if top5_neg:
+        neg_list = ", ".join(f"{p} (${v:+,.0f})" for v, p in top5_neg)
+        s3 = f"Top 5 negative NOI variances: {neg_list}."
+    else:
+        s3 = "No properties showed negative NOI variance year-over-year."
+
+    s4 = (f"As of {latest_q_label}, {n_below} propert{'y' if n_below == 1 else 'ies'} "
+          f"{'was' if n_below == 1 else 'were'} below the {eco_occ_target:.0%} economic occupancy target, "
+          f"indicating revenue collection gaps from vacancy loss, concessions, or bad debt.")
+
+    if top5_leakage:
+        leak_list = ", ".join(f"{p} ({gap:.1%})" for gap, p in top5_leakage)
+        s5 = (f"Top 5 leakage gap properties — units are occupied but rent is not being fully "
+              f"collected — were: {leak_list}.")
+    else:
+        s5 = "No properties showed a positive leakage gap in the current quarter."
+
+    total_props = len({k.property_name for k in kpis})
+    below_pct = n_below / total_props * 100 if total_props else 0
+    if noi_var < 0 and below_pct > 30:
+        health = "under stress, with both declining NOI and widespread economic occupancy challenges requiring immediate management attention"
+    elif noi_var >= 0 and below_pct < 20:
+        health = "in generally healthy condition, with improving NOI and manageable occupancy levels across the portfolio"
+    else:
+        health = "showing mixed performance, with select properties driving outsized variance and warranting targeted review"
+
+    s6 = f"Overall, the portfolio is {health}."
+
+    return "\n\n".join([s1, s2, s3, s4, s5, s6])
+
+
+def _write_dashboard_ar_summary(ws, ar_rows: list, portfolio_name: str, start_row: int) -> int:
+    """Write portfolio-level AR Aging summary block on the Dashboard tab."""
+    if not ar_rows:
+        return start_row
+
+    periods = sorted({(r.year, r.month) for r in ar_rows})
+    periods_set = set(periods)
+    col_seq = []
+    for (yr, mo) in periods:
+        col_seq.append(("period", yr, mo))
+        if (yr - 1, mo) in periods_set:
+            col_seq.append(("yoy", yr, mo))
+
+    row = start_row
+    for rtype in ("Tenant Rent", "Subsidy"):
+        rtype_rows = [r for r in ar_rows if r.receivable_type == rtype]
+        if not rtype_rows:
+            continue
+
+        prop_count = len({r.property_name for r in rtype_rows})
+        header_text = (
+            f"{portfolio_name} — Portfolio AR Summary — {rtype} "
+            f"({prop_count} Propert{'y' if prop_count == 1 else 'ies'})"
         )
-    return commentary
+        ws.cell(row, 1, header_text).font = BOLD_FONT
+        row += 1
+
+        num_cols = 1 + len(col_seq)
+        ws.cell(row, 1, "Metric")
+        for ci, (ctype, yr, mo) in enumerate(col_seq, 2):
+            lbl = "YoY Δ" if ctype == "yoy" else _ar_period_label(yr, mo)
+            ws.cell(row, ci, lbl)
+        style_header_row(ws, row, num_cols)
+        row += 1
+
+        def _agg(yr, mo):
+            rows = [r for r in rtype_rows if r.year == yr and r.month == mo]
+            if not rows:
+                return None
+            charge = sum(r.charge_amount for r in rows)
+            overdue = sum(r.owed_31_60 + r.owed_61_90 + r.owed_over_90 for r in rows)
+            return {
+                "current_owed": sum(r.current_owed for r in rows),
+                "prepayments":  sum(r.prepayments for r in rows),
+                "pct_overdue":  (overdue / charge) if charge > 0 else None,
+            }
+
+        period_aggs_ar = {(yr, mo): _agg(yr, mo) for (yr, mo) in periods}
+
+        for label, key, fmt, fav_pos in [
+            ("Current Owed", "current_owed", CURRENCY_FMT, False),
+            ("Pre-payments",  "prepayments",  CURRENCY_FMT, False),
+            ("% >30 Days",    "pct_overdue",  PCT_FMT,      False),
+        ]:
+            ws.cell(row, 1, label).font = BOLD_FONT
+            for ci, (ctype, yr, mo) in enumerate(col_seq, 2):
+                if ctype == "period":
+                    a = period_aggs_ar.get((yr, mo))
+                    val = a[key] if a else None
+                    _c(ws, row, ci, val, fmt)
+                else:
+                    curr = period_aggs_ar.get((yr, mo))
+                    prev = period_aggs_ar.get((yr - 1, mo))
+                    if curr and prev and curr.get(key) is not None and prev.get(key) is not None:
+                        delta = curr[key] - prev[key]
+                        _c(ws, row, ci, delta, fmt)
+                        apply_variance_fill(ws.cell(row, ci), delta, favorable_is_positive=fav_pos)
+            row += 1
+
+        row += 2  # blank rows between blocks
+
+    return row
 
 
 def _apply_property_row_formats(ws, row, headers, agg):
