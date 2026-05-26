@@ -315,3 +315,38 @@ body {
   color: #dc2626 !important;
   background: #fee2e2 !important;
 }
+
+/* ── Collapsible KPI group headers and child rows ────────────────────────── */
+
+/* KPI group header rows — collapsible section headers */
+.kpi-group-header td {
+  background: #EBF3FB;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kpi-table .kpi-group-header:hover td {
+  background: #D6E8F7;
+}
+
+/* Chevron on the label cell — rotates when group is open */
+.kpi-group-header .kpi-label::before {
+  content: '▶\00a0';
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+
+.kpi-group-header.open .kpi-label::before {
+  transform: rotate(90deg);
+}
+
+/* Child rows — hidden by default, shown when group is open */
+.kpi-group-child {
+  display: none;
+}
+
+/* Group header cells must not inherit pos/neg color */
+.kpi-group-header td.pos,
+.kpi-group-header td.neg {
+  color: inherit;
+}
