@@ -97,6 +97,134 @@
   </div>
 </section>
 
+<!-- AR Aging -->
+{% if ar_summary %}
+<section class="card">
+  <h2>AR Aging — YoY Trend</h2>
+
+  {% for rtype in ["Tenant Rent", "Subsidy"] %}
+  {% if ar_summary[rtype] is defined %}
+  {% set ar = ar_summary[rtype] %}
+  <h3 style="margin-top:16px;margin-bottom:8px;font-size:13px;color:#1f4e79;">
+    Portfolio AR Summary — {{ rtype }} ({{ ar.property_count }} propert{{ 'y' if ar.property_count == 1 else 'ies' }})
+  </h3>
+  <div style="overflow-x:auto;">
+  <table class="kpi-table" style="min-width:400px;">
+    <thead>
+      <tr>
+        <th>Metric</th>
+        {% for col in ar.cols %}
+          <th{% if col.type == 'yoy' %} style="background:#2e75b6;"{% endif %}>{{ col.label }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Current Owed row -->
+      <tr>
+        <td title="Current-period balance outstanding">Current Owed</td>
+        {% for col in ar.cols %}
+          {% if col.type == 'period' %}
+            <td class="currency">{{ col.current_owed | currency }}</td>
+          {% else %}
+            {% set delta = col.current_owed_delta %}
+            <td class="currency {% if delta is not none %}{% if delta > 0 %}neg{% elif delta < 0 %}pos{% endif %}{% endif %}">
+              {% if delta is not none %}
+                {% if delta > 0 %}+{% endif %}{{ delta | currency }}
+              {% else %}—{% endif %}
+            </td>
+          {% endif %}
+        {% endfor %}
+      </tr>
+      <!-- Pre-payments row -->
+      <tr>
+        <td title="Credit balances (negative = tenant credits)">Pre-payments</td>
+        {% for col in ar.cols %}
+          {% if col.type == 'period' %}
+            <td class="currency">{{ col.prepayments | currency }}</td>
+          {% else %}
+            {% set delta = col.prepayments_delta %}
+            <td class="currency {% if delta is not none %}{% if delta > 0 %}neg{% elif delta < 0 %}pos{% endif %}{% endif %}">
+              {% if delta is not none %}
+                {% if delta > 0 %}+{% endif %}{{ delta | currency }}
+              {% else %}—{% endif %}
+            </td>
+          {% endif %}
+        {% endfor %}
+      </tr>
+      <!-- % >30 Days row -->
+      <tr>
+        <td title="% of charges that are 31+ days past due">% &gt;30 Days</td>
+        {% for col in ar.cols %}
+          {% if col.type == 'period' %}
+            <td class="pct">{{ col.pct_overdue | pct }}</td>
+          {% else %}
+            {% set delta = col.pct_overdue_delta %}
+            <td class="pct {% if delta is not none %}{% if delta > 0 %}neg{% elif delta < 0 %}pos{% endif %}{% endif %}">
+              {% if delta is not none %}
+                {% if delta > 0 %}+{% endif %}{{ "%.1f pp"|format(delta * 100) }}
+              {% else %}—{% endif %}
+            </td>
+          {% endif %}
+        {% endfor %}
+      </tr>
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+  {% endfor %}
+
+  <!-- Property AR table for latest period -->
+  {% if ar_prop_rows and ar_latest_period_label %}
+  <h3 style="margin-top:24px;margin-bottom:8px;font-size:13px;color:#1f4e79;">
+    Property AR Analysis — As of {{ ar_latest_period_label }}
+  </h3>
+  <div style="overflow-x:auto;">
+  <table class="data-table" style="min-width:600px;">
+    <thead>
+      <tr>
+        <th>Property</th>
+        <th>PM</th>
+        <th title="Tenant Rent current-period balance">TR Current Owed</th>
+        <th title="Tenant Rent credit balances">TR Pre-payments</th>
+        <th title="Tenant Rent % of charges 31+ days past due">TR % &gt;30</th>
+        <th title="YoY change in Tenant Rent % &gt;30 days">TR YoY Δ % &gt;30</th>
+        <th title="Subsidy current-period balance">Sub Current Owed</th>
+        <th title="Subsidy credit balances">Sub Pre-payments</th>
+        <th title="Subsidy % of charges 31+ days past due">Sub % &gt;30</th>
+        <th title="YoY change in Subsidy % &gt;30 days">Sub YoY Δ % &gt;30</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in ar_prop_rows %}
+      <tr>
+        <td>{{ row.property_name }}</td>
+        <td>{{ row.pm_name }}</td>
+        <td class="currency">{{ row.tr_current_owed | currency }}</td>
+        <td class="currency">{{ row.tr_prepayments | currency }}</td>
+        <td class="pct">{{ row.tr_pct_overdue | pct }}</td>
+        <td class="pct {% if row.tr_yoy_pct_overdue_delta is not none %}{% if row.tr_yoy_pct_overdue_delta > 0 %}neg{% elif row.tr_yoy_pct_overdue_delta < 0 %}pos{% endif %}{% endif %}">
+          {% if row.tr_yoy_pct_overdue_delta is not none %}
+            {% if row.tr_yoy_pct_overdue_delta > 0 %}+{% endif %}{{ "%.1f pp"|format(row.tr_yoy_pct_overdue_delta * 100) }}
+          {% else %}—{% endif %}
+        </td>
+        <td class="currency">{{ row.sub_current_owed | currency }}</td>
+        <td class="currency">{{ row.sub_prepayments | currency }}</td>
+        <td class="pct">{{ row.sub_pct_overdue | pct }}</td>
+        <td class="pct {% if row.sub_yoy_pct_overdue_delta is not none %}{% if row.sub_yoy_pct_overdue_delta > 0 %}neg{% elif row.sub_yoy_pct_overdue_delta < 0 %}pos{% endif %}{% endif %}">
+          {% if row.sub_yoy_pct_overdue_delta is not none %}
+            {% if row.sub_yoy_pct_overdue_delta > 0 %}+{% endif %}{{ "%.1f pp"|format(row.sub_yoy_pct_overdue_delta * 100) }}
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+
+</section>
+{% endif %}
+
 <!-- Quality Checks -->
 {% if quality_checks %}
 <section class="card">
