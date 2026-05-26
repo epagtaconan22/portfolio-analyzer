@@ -6,7 +6,7 @@
   <p class="subtitle">Upload financial statement workbooks to generate a KPI analysis.</p>
 </div>
 
-<form method="POST" enctype="multipart/form-data" action="/">
+<form method="POST" enctype="multipart/form-data" action="/" id="analysis-form">
   <section class="card">
     <h2>Required Inputs</h2>
     <div class="field">
@@ -15,9 +15,17 @@
              placeholder="e.g. Affirmed Housing 2024" required>
     </div>
     <div class="field">
-      <label for="financial_files">Financial Statement Workbooks (.xlsx)</label>
-      <input type="file" id="financial_files" name="financial_files"
-             multiple accept=".xlsx,.xls" required>
+      <label>Financial Statement Workbooks (.xlsx)</label>
+      <div class="drop-zone" id="fin-drop-zone">
+        <input type="file" id="financial_files" name="financial_files"
+               class="drop-zone-input" multiple accept=".xlsx,.xls" required>
+        <div class="drop-zone-body">
+          <div class="drop-zone-icon">📂</div>
+          <div class="drop-zone-text">Drag &amp; drop workbooks here</div>
+          <div class="drop-zone-sub">or <span class="browse-link" data-for="financial_files">browse files</span></div>
+        </div>
+        <ul class="file-list" id="fin-file-list"></ul>
+      </div>
       <span class="hint">One or more 12-month income statement workbooks. Actual, Budget, or Actual vs. Budget formats accepted.</span>
     </div>
   </section>
@@ -25,9 +33,18 @@
   <section class="card">
     <h2>Physical Occupancy (Optional)</h2>
     <div class="field">
-      <label for="occupancy_file">Physical Occupancy Report (.xlsx)</label>
-      <input type="file" id="occupancy_file" name="occupancy_file" accept=".xlsx,.xls">
-      <span class="hint">Required for Physical Occ %, Leakage Gap, and Per Unit calculations. Columns: Property, Year, Month, Occupied Units, Total Units.</span>
+      <label>Physical Occupancy Report (.xlsx)</label>
+      <div class="drop-zone" id="occ-drop-zone">
+        <input type="file" id="occupancy_file" name="occupancy_file"
+               class="drop-zone-input" multiple accept=".xlsx,.xls">
+        <div class="drop-zone-body">
+          <div class="drop-zone-icon">📊</div>
+          <div class="drop-zone-text">Drag &amp; drop occupancy report here</div>
+          <div class="drop-zone-sub">or <span class="browse-link" data-for="occupancy_file">browse files</span></div>
+        </div>
+        <ul class="file-list" id="occ-file-list"></ul>
+      </div>
+      <span class="hint">Required for Physical Occ %, Leakage Gap, and Per Unit calculations. Multiple files accepted (e.g. one per PM company).</span>
     </div>
   </section>
 
@@ -79,4 +96,109 @@
     <button type="submit" class="btn-primary">Run Analysis</button>
   </div>
 </form>
+
+<script>
+(function () {
+  // ── Generic drop zone wiring ──────────────────────────────────────────────
+  function initDropZone(zoneId, inputId, listId) {
+    var zone  = document.getElementById(zoneId);
+    var input = document.getElementById(inputId);
+    var list  = document.getElementById(listId);
+    if (!zone || !input || !list) return;
+
+    // Click on the "browse files" link triggers the hidden input
+    zone.querySelectorAll('.browse-link').forEach(function (link) {
+      link.addEventListener('click', function (e) {
+        e.preventDefault();
+        input.click();
+      });
+    });
+
+    // Also allow clicking anywhere on the drop-zone body to browse
+    var body = zone.querySelector('.drop-zone-body');
+    if (body) {
+      body.addEventListener('click', function () { input.click(); });
+    }
+
+    // File input change (normal browse)
+    input.addEventListener('change', function () {
+      renderFileList(list, input.files);
+    });
+
+    // Drag events
+    zone.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.add('drag-over');
+    });
+
+    zone.addEventListener('dragleave', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      // Only remove class if leaving the zone entirely (not a child element)
+      if (!zone.contains(e.relatedTarget)) {
+        zone.classList.remove('drag-over');
+      }
+    });
+
+    zone.addEventListener('drop', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.remove('drag-over');
+
+      var files = e.dataTransfer.files;
+      if (!files.length) return;
+
+      // Filter to accepted extensions
+      var accepted = Array.from(files).filter(function (f) {
+        var ext = f.name.split('.').pop().toLowerCase();
+        return (inputId === 'financial_files' || inputId === 'occupancy_file')
+          ? (ext === 'xlsx' || ext === 'xls')
+          : true;
+      });
+      if (!accepted.length) return;
+
+      // Assign files to the input using DataTransfer API
+      try {
+        var dt = new DataTransfer();
+        accepted.forEach(function (f) { dt.items.add(f); });
+        input.files = dt.files;
+      } catch (err) {
+        // Safari fallback: DataTransfer assignment not supported — show error hint
+        renderFileList(list, null, 'Browser does not support drag-and-drop assignment. Please use Browse.');
+        return;
+      }
+      renderFileList(list, input.files);
+    });
+  }
+
+  // ── Render selected file names below the drop zone ────────────────────────
+  function renderFileList(list, files, errorMsg) {
+    list.innerHTML = '';
+    if (errorMsg) {
+      var li = document.createElement('li');
+      li.className = 'file-list-error';
+      li.textContent = errorMsg;
+      list.appendChild(li);
+      return;
+    }
+    if (!files || !files.length) return;
+    Array.from(files).forEach(function (f) {
+      var li = document.createElement('li');
+      li.textContent = f.name + ' (' + formatBytes(f.size) + ')';
+      list.appendChild(li);
+    });
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+
+  // Wire up both drop zones
+  initDropZone('fin-drop-zone', 'financial_files', 'fin-file-list');
+  initDropZone('occ-drop-zone', 'occupancy_file',  'occ-file-list');
+})();
+</script>
 {% endblock %}

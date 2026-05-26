@@ -331,6 +331,7 @@ PROPERTY_NAME_MAP: dict[str, str] = {
     "Sage Pointe Apartments":          "Sage Pointe",
     "Solterra Senior Residences":      "Solterra",
     "Sonoma Court Apartments":         "Sonoma Court",
+    "Ten Fifty B Street Hsg Ptrs":     "Ten Fifty B Street",
     "Ventaliso Apartments":            "Ventaliso",
     "Vitalia (Bascom) Apts.":          "Vitalia",
 }

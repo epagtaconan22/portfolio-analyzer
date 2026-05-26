@@ -6,7 +6,7 @@ Supports two layouts:
     Columns: Property | Year | Month | Occupied Units | Total Units
 
   Wide (Yardi):  one row per property, months as columns (values are percentages 0-100).
-    Example header:  Property | Name | Units | Sq Ft | Jan | Feb | ... | Dec
+    Example header:  Name | Units | Sq Ft | Jan | Feb | ... | Dec
     Title rows contain the report year ("Month Year = 01/2025").
 """
 
@@ -27,6 +27,28 @@ _MONTH_ABBRS = ["jan", "feb", "mar", "apr", "may", "jun",
                 "jul", "aug", "sep", "oct", "nov", "dec"]
 
 _YEAR_RE = re.compile(r'\b(20\d{2})\b')
+
+# Header cells that identify a "property name" column in the wide Yardi format
+_WIDE_NAME_HEADERS: frozenset[str] = frozenset({
+    "name", "property", "property name", "project", "project name",
+    "asset", "asset name", "prop", "building", "building name",
+})
+
+# Header cells that identify a "total units" column in the wide Yardi format
+_WIDE_UNITS_HEADERS: frozenset[str] = frozenset({
+    "units", "total units", "total", "# units", "unit count",
+    "num units", "no. of units", "no of units", "# of units",
+})
+
+# Values in a percentage cell that should be treated as "no data for this month"
+_SKIP_PCT_VALUES: frozenset[str] = frozenset({
+    "", "-", "--", "n/a", "na", "none", "null",
+})
+
+# Rows whose Name-column value matches these patterns are summary/filler rows to skip
+_SKIP_NAME_PATTERNS: frozenset[str] = frozenset({
+    "total", "portfolio total", "grand total", "portfolio", "subtotal",
+})
 
 
 def parse_occupancy_report(file_path: str) -> list[OccupancyRow]:
@@ -75,6 +97,14 @@ def _parse_wide_format(all_cells: list) -> Optional[list[OccupancyRow]]:
 
     Returns a list of OccupancyRow records, or None if the sheet does not look
     like the wide format (allowing the caller to fall back to narrow format).
+
+    Robustness notes:
+    - Name column: accepts "Name", "Property", "Property Name", "Project", etc.
+    - Units column: accepts "Units", "Total Units", "# Units", "Unit Count", etc.
+    - Percentage values: accepts bare floats (95.0), strings ("95.0"), and
+      percent-suffixed strings ("95.0%"). Skips cells that are blank, "--", "N/A".
+    - Total units: accepts floats (rounded to int) and comma-formatted integers.
+    - Summary rows: skips "Weighted Average", "Average", "Total", "Portfolio Total".
     """
     # Find the header row: must contain >= 6 month abbreviations as column headers.
     header_row_idx: Optional[int] = None
@@ -101,9 +131,9 @@ def _parse_wide_format(all_cells: list) -> Optional[list[OccupancyRow]]:
         s = str(cell).lower().strip()
         if s in _MONTH_ABBRS:
             month_cols[_MONTH_ABBRS.index(s) + 1] = col_idx
-        elif s == "name" and name_col is None:
+        elif name_col is None and s in _WIDE_NAME_HEADERS:
             name_col = col_idx
-        elif s == "units" and units_col is None:
+        elif units_col is None and s in _WIDE_UNITS_HEADERS:
             units_col = col_idx
 
     # Need both a name column and a units column to proceed.
@@ -139,15 +169,19 @@ def _parse_wide_format(all_cells: list) -> Optional[list[OccupancyRow]]:
         name = str(name_cell).strip()
         if not name:
             continue
-        # Skip summary / weighted-average rows
+
+        # Skip summary / weighted-average / total rows
         name_lower = name.lower()
-        if "weighted average" in name_lower or name_lower.startswith("average"):
+        if (name_lower in _SKIP_NAME_PATTERNS
+                or "weighted average" in name_lower
+                or name_lower.startswith("average")):
             continue
 
-        # Total units from the "Units" column
+        # Total units: accept floats (e.g. "100.0") and comma-formatted strings
         units_cell = row[units_col] if units_col < len(row) else None
         try:
-            total_units = int(units_cell or 0)
+            units_str = str(units_cell).strip().replace(',', '').rstrip('%') if units_cell is not None else "0"
+            total_units = int(round(float(units_str)))
         except (TypeError, ValueError):
             continue
         if total_units <= 0:
@@ -160,12 +194,23 @@ def _parse_wide_format(all_cells: list) -> Optional[list[OccupancyRow]]:
             pct_cell = row[col_idx]
             if pct_cell is None:
                 continue
+
+            # Parse percentage — handle bare float, "95.0", "95.0%", "N/A", "--"
+            pct_str = str(pct_cell).strip().rstrip('%').replace(',', '')
+            if pct_str.lower() in _SKIP_PCT_VALUES:
+                continue
             try:
-                pct = float(pct_cell)          # value is on a 0-100 scale
-            except (TypeError, ValueError):
+                pct = float(pct_str)
+            except (ValueError, AttributeError):
                 continue
-            if not (0 <= pct <= 105):          # sanity-check
+
+            # Sanity-check: allow 0–110 to accommodate minor rounding artefacts.
+            # Values slightly below 0 are treated as 0 (rounding); values > 110 are
+            # likely data errors (e.g. a dollar amount was placed in a % column).
+            if pct > 110:
                 continue
+            pct = max(0.0, pct)
+
             occupied_units = round(pct / 100 * total_units)
             rows.append(OccupancyRow(
                 property_name=name,
