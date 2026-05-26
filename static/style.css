@@ -195,8 +195,8 @@ body {
   text-align: left;
 }
 .kpi-transposed thead th:not(.kpi-label-col) {
-  text-align: center;
-  min-width: 120px;
+  text-align: right;
+  min-width: 130px;
 }
 .kpi-label {
   font-weight: 500;
@@ -212,6 +212,14 @@ body {
 }
 .kpi-transposed td:not(.kpi-label) {
   text-align: right;
+}
+/* Property count sub-text inside period column headers */
+.period-prop-count {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.75;
+  margin-top: 2px;
 }
 
 /* Commentary */

@@ -200,15 +200,21 @@ def show(run_id):
     sorted_quarters = sorted(all_quarters)
     period_labels = [_quarter_label(yr, q) for (yr, q) in sorted_quarters]
 
-    # Aggregate all non-carveout KPIs for each quarter-period
+    # Aggregate all non-carveout KPIs for each quarter-period; also count distinct properties
     period_aggs: dict[str, dict] = {}
+    period_property_counts: dict[str, int] = {}
     for (yr, q) in sorted_quarters:
         months = {(q - 1) * 3 + 1, (q - 1) * 3 + 2, (q - 1) * 3 + 3}
         q_kpis = [
             k for k in kpis
             if k.get("year") == yr and k.get("month") in months and not k.get("is_carveout")
         ]
-        period_aggs[_quarter_label(yr, q)] = _agg_kpis(q_kpis)
+        lbl = _quarter_label(yr, q)
+        period_aggs[lbl] = _agg_kpis(q_kpis)
+        period_property_counts[lbl] = len({k["property_name"] for k in q_kpis})
+
+    # Latest period label — used for the per-property table heading
+    latest_period_label = period_labels[-1] if period_labels else ""
 
     # Build summary_kpi_rows: one entry per KPI definition row
     summary_kpi_rows = []
@@ -250,11 +256,13 @@ def show(run_id):
         meta=meta,
         kpis=kpis,
         period_labels=period_labels,
+        period_property_counts=period_property_counts,
         summary_kpi_rows=summary_kpi_rows,
         prop_rows=prop_rows,
         quality_checks=checks,
         portfolio_name=portfolio_name,
         eco_occ_target=eco_occ_target,
+        latest_period_label=latest_period_label,
         years=years,
         properties=props,
         num_properties=len(props),

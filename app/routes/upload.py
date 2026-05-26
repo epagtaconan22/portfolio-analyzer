@@ -15,7 +15,7 @@ from app.exporter.backup_workbook import build_backup_workbook
 from app.exporter.validator import validate_both_workbooks
 from app.storage.runs import new_run_id, save_run
 from app.models import QualityCheck
-from config import ECO_OCC_TARGET, QUARTERS
+from config import ECO_OCC_TARGET, QUARTERS, PROPERTY_NAME_MAP
 
 bp = Blueprint("upload", __name__)
 ALLOWED_EXT = {".xlsx", ".xls"}
@@ -38,7 +38,7 @@ def run_analysis():
     carveouts = {p.strip().lower() for p in carveout_raw.splitlines() if p.strip()}
 
     fin_files = request.files.getlist("financial_files")
-    occ_file  = request.files.get("occupancy_file")
+    occ_files = request.files.getlist("occupancy_file")
 
     if not fin_files or all(f.filename == "" for f in fin_files):
         flash("Please upload at least one financial statement workbook.")
@@ -85,11 +85,24 @@ def run_analysis():
     # Run pipeline
     raw_rows, source_index = parse_financial_workbooks(saved_paths, pm_name_map)
 
+    # Normalize property names to canonical display names before any downstream processing.
+    # This ensures the Excel exports, stored JSON, and web UI all use the same short names.
+    for _row in raw_rows:
+        _row.property_name = PROPERTY_NAME_MAP.get(_row.property_name, _row.property_name)
+    for _entry in source_index:
+        _entry.property_name = PROPERTY_NAME_MAP.get(_entry.property_name, _entry.property_name)
+
     occ_rows = []
-    if occ_file and occ_file.filename:
-        occ_path = os.path.join("uploads", secure_filename(occ_file.filename))
-        occ_file.save(occ_path)
-        occ_rows = parse_occupancy_report(occ_path)
+    for occ_file in occ_files:
+        if occ_file and occ_file.filename:
+            occ_path = os.path.join("uploads", secure_filename(occ_file.filename))
+            occ_file.save(occ_path)
+            occ_rows.extend(parse_occupancy_report(occ_path))
+
+    # Normalize occupancy report property names so the join with financial data works
+    # even when the two sources use different spellings of the same property.
+    for _row in occ_rows:
+        _row.property_name = PROPERTY_NAME_MAP.get(_row.property_name, _row.property_name)
 
     mapped_rows, mapping_entries = map_rows(raw_rows, custom_mapping)
     kpis = calculate_noi(mapped_rows)

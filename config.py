@@ -308,3 +308,29 @@ ACCOUNT_MAPPING_RULES = [
     ("late charge",       "Other Income", "Income", True, False),
     ("returned check",    "Other Income", "Income", True, False),
 ]
+
+# Canonical property name map — normalizes the raw names the parser infers from
+# sheet names / Yardi title rows to the short display names used in the web app
+# and Excel workbooks.  Keys are the exact strings the parser may produce;
+# values are the canonical names.  Applied during upload so all downstream
+# storage, calculations, and exports use the canonical names.
+PROPERTY_NAME_MAP: dict[str, str] = {
+    "4760 W. Melrose Ave.":            "Emerson",
+    "Allanza Apt. Homes":              "Allanza",
+    "Alora Family":                    "Alora",
+    "Arbor Green Residences":          "Arbor Green",
+    "Aurora Apartments":               "Aurora",
+    "Connections Housing":             "Connections",
+    "Dahlia Apartments":               "Dahlia",
+    "Estrella Apartments":             "Estrella",
+    "Luna at Pacific Highlands Ranch": "Luna",
+    "Monte Vista Apartments":          "Monte Vista I",
+    "Monte Vista II Family Housing":   "Monte Vista II",
+    "Nova Apartments":                 "Nova",
+    "Orange Gardens Apartments":       "Orange Gardens",
+    "Sage Pointe Apartments":          "Sage Pointe",
+    "Solterra Senior Residences":      "Solterra",
+    "Sonoma Court Apartments":         "Sonoma Court",
+    "Ventaliso Apartments":            "Ventaliso",
+    "Vitalia (Bascom) Apts.":          "Vitalia",
+}

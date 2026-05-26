@@ -13,14 +13,14 @@
 
 <!-- Portfolio Summary — transposed: KPI labels as rows, quarter-periods as columns -->
 <section class="card">
-  <h2>Portfolio Summary &mdash; {{ num_properties }} Properties</h2>
+  <h2>Portfolio Summary</h2>
   <div class="table-scroll">
   <table class="kpi-table kpi-transposed">
     <thead>
       <tr>
         <th class="kpi-label-col">KPI</th>
         {% for lbl in period_labels %}
-        <th>{{ lbl }}</th>
+        <th>{{ lbl }}<br><span class="period-prop-count">{{ period_property_counts.get(lbl, 0) }} Properties</span></th>
         {% endfor %}
       </tr>
     </thead>
@@ -60,7 +60,7 @@
 
 <!-- Property Table -->
 <section class="card">
-  <h2>Properties &mdash; {{ num_properties }} in Analysis</h2>
+  <h2>Per Property Analysis ({{ latest_period_label }})</h2>
   <div class="table-scroll">
   <table class="data-table">
     <thead>
