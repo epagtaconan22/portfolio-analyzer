@@ -256,10 +256,7 @@ ACCOUNT_MAPPING_RULES = [
     ("storage",           "Operating Expense", "Expense", True, False),
     ("moving",            "Operating Expense", "Expense", True, False),
     # Concession-style items
-    ("admin free unit",   "Concessions", "Contra-Income", True, True),
     ("free unit",         "Concessions", "Contra-Income", True, True),
-    ("model unit",        "Concessions", "Contra-Income", True, True),
-    ("non revenue unit",  "Concessions", "Contra-Income", True, True),
     # Interest income (non-operating, exclude from NOI)
     ("interest income",   "Excluded", "Excluded", False, False),
     ("oth inc-interest",  "Excluded", "Excluded", False, False),
