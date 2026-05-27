@@ -131,8 +131,9 @@ def run_analysis():
         allowed = {int(m) for m in selected_months_raw}
         kpis = [k for k in kpis if k.month in allowed]
 
-    # Apply exclusions and carveouts
-    kpis = [k for k in kpis if k.property_name.lower() not in excluded]
+    # Apply exclusions and carveouts (financial KPIs and AR aging)
+    kpis    = [k for k in kpis    if k.property_name.lower() not in excluded]
+    ar_rows = [r for r in ar_rows if r.property_name.lower() not in excluded]
     for k in kpis:
         if k.property_name.lower() in carveouts:
             k.is_carveout = True
