@@ -1,17 +1,45 @@
 {% extends "base.html" %}
 {% block title %}{{ portfolio_name }} Dashboard{% endblock %}
 {% block content %}
-{% macro kpi_value_cell(val, fmt, fav) %}
+{% macro kpi_value_cell(val, fmt, fav, threshold=0) %}
   {%- set color_cls = '' -%}
-  {%- if fav is not none -%}
+  {%- if fav is not none and val is not none and (val | abs) > threshold -%}
     {%- if fav -%}
-      {%- set color_cls = 'pos' if (val or 0) >= 0 else 'neg' -%}
+      {%- set color_cls = 'pos' if val >= 0 else 'neg' -%}
     {%- else -%}
-      {%- set color_cls = 'neg' if (val or 0) > 0 else ('pos' if (val or 0) < 0 else '') -%}
+      {%- set color_cls = 'neg' if val > 0 else ('pos' if val < 0 else '') -%}
     {%- endif -%}
   {%- endif -%}
   <td class="{% if fmt == 'currency' %}currency{% else %}pct{% endif %} {{ color_cls }}">
     {%- if fmt == 'currency' -%}{{ val | currency }}{%- else -%}{{ val | pct }}{%- endif -%}
+  </td>
+{% endmacro %}
+{# YoY delta cell: Δ$ for currency KPIs, Δpp for pct KPIs #}
+{% macro yoy_delta_cell(val, fmt, fav) %}
+  {%- set color_cls = '' -%}
+  {%- if fav is not none and val is not none -%}
+    {%- if fav -%}
+      {%- set color_cls = 'pos' if val >= 0 else 'neg' -%}
+    {%- else -%}
+      {%- set color_cls = 'neg' if val > 0 else ('pos' if val < 0 else '') -%}
+    {%- endif -%}
+  {%- endif -%}
+  <td class="{% if fmt == 'currency' %}currency{% else %}pct{% endif %} yoy-col {{ color_cls }}">
+    {%- if val is none -%}—{%- elif fmt == 'currency' -%}{{ val | currency }}{%- else -%}{{ val | pct }}{%- endif -%}
+  </td>
+{% endmacro %}
+{# YoY % change cell: only populated for currency KPIs; blank for pct KPIs (pp delta is sufficient) #}
+{% macro yoy_pct_cell(val, yoy_type, fav) %}
+  {%- set color_cls = '' -%}
+  {%- if yoy_type == 'currency' and fav is not none and val is not none -%}
+    {%- if fav -%}
+      {%- set color_cls = 'pos' if val >= 0 else 'neg' -%}
+    {%- else -%}
+      {%- set color_cls = 'neg' if val > 0 else ('pos' if val < 0 else '') -%}
+    {%- endif -%}
+  {%- endif -%}
+  <td class="pct yoy-col {{ color_cls }}">
+    {%- if yoy_type != 'currency' or val is none -%}—{%- else -%}{{ val | pct }}{%- endif -%}
   </td>
 {% endmacro %}
 <div class="page-header">
@@ -35,27 +63,34 @@
         {% for lbl in period_labels %}
         <th>{{ lbl }}<br><span class="period-prop-count">{{ period_property_counts.get(lbl, 0) }} Properties</span></th>
         {% endfor %}
+        {% for (prev_yr, curr_yr) in year_pairs %}
+        <th class="yoy-col" title="Year-over-year change: annual {{ prev_yr }} vs {{ curr_yr }}">YoY Δ<br><span class="period-prop-count">{{ prev_yr }}→{{ curr_yr }}</span></th>
+        <th class="yoy-col" title="Year-over-year % change: annual {{ prev_yr }} vs {{ curr_yr }}">YoY % Chg<br><span class="period-prop-count">{{ prev_yr }}→{{ curr_yr }}</span></th>
+        {% endfor %}
       </tr>
     </thead>
     <tbody>
       {% for row in summary_kpi_rows %}
       {% if row.sep %}
-      <tr class="kpi-sep"><td colspan="{{ period_labels|length + 1 }}"></td></tr>
+      <tr class="kpi-sep"><td colspan="{{ period_labels|length + 1 + year_pairs|length * 2 }}"></td></tr>
       {% elif row.is_group_header %}
       <tr class="kpi-group-header" data-group="{{ row.group_id }}"
           onclick="toggleKpiGroup('{{ row.group_id }}')">
         <td class="kpi-label" title="{{ row.tooltip }}">{{ row.label }}</td>
-        {% for val in row.period_values %}{{ kpi_value_cell(val, row.fmt, row.favorable_positive) }}{% endfor %}
+        {% for val in row.period_values %}{{ kpi_value_cell(val, row.fmt, row.favorable_positive, row.color_threshold) }}{% endfor %}
+        {% for yoy in row.yoy_values %}{{ yoy_delta_cell(yoy.delta, row.fmt, yoy.favorable_positive) }}{{ yoy_pct_cell(yoy.pct_chg, row.yoy_type, yoy.favorable_positive) }}{% endfor %}
       </tr>
       {% elif row.is_group_child %}
       <tr class="kpi-group-child" data-parent="{{ row.group_id }}">
         <td class="kpi-label" title="{{ row.tooltip }}">{{ row.label }}</td>
-        {% for val in row.period_values %}{{ kpi_value_cell(val, row.fmt, row.favorable_positive) }}{% endfor %}
+        {% for val in row.period_values %}{{ kpi_value_cell(val, row.fmt, row.favorable_positive, row.color_threshold) }}{% endfor %}
+        {% for yoy in row.yoy_values %}{{ yoy_delta_cell(yoy.delta, row.fmt, yoy.favorable_positive) }}{{ yoy_pct_cell(yoy.pct_chg, row.yoy_type, yoy.favorable_positive) }}{% endfor %}
       </tr>
       {% else %}
       <tr>
         <td class="kpi-label" title="{{ row.tooltip }}">{{ row.label }}</td>
-        {% for val in row.period_values %}{{ kpi_value_cell(val, row.fmt, row.favorable_positive) }}{% endfor %}
+        {% for val in row.period_values %}{{ kpi_value_cell(val, row.fmt, row.favorable_positive, row.color_threshold) }}{% endfor %}
+        {% for yoy in row.yoy_values %}{{ yoy_delta_cell(yoy.delta, row.fmt, yoy.favorable_positive) }}{{ yoy_pct_cell(yoy.pct_chg, row.yoy_type, yoy.favorable_positive) }}{% endfor %}
       </tr>
       {% endif %}
       {% endfor %}

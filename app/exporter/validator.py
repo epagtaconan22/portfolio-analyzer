@@ -5,7 +5,7 @@ import zipfile
 from app.models import QualityCheck
 
 _ERROR_TOKENS = ["#REF!", "#DIV/0!", "#VALUE!", "#NAME?", "#N/A"]
-_MAIN_TABS    = {"Dashboard", "Property Analysis", "Property Monthly KPIs", "AR Aging"}
+_MAIN_TABS    = {"Dashboard", "Property Quarterly KPIs", "Property Monthly KPIs", "AR Aging"}
 _BACKUP_TABS  = {"Raw_Data", "Source_Index", "Assumptions_Mapping",
                  "Budget_vs_Actual", "Account_Detail", "Economic_Occupancy",
                  "Quality_Checks", "AR_Aging_Detail"}

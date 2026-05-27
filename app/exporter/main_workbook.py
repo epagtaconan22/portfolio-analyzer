@@ -47,6 +47,22 @@ _AR_MONTH_ABBR = {
     7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec",
 }
 
+# Keys that receive YoY comparison columns in the Dashboard KPI table.
+# Currency keys get both a Δ$ column and a Δ% column; pct keys get Δpp only.
+_YOY_CURRENCY_KEYS = frozenset({
+    "actual_income", "actual_expenses", "actual_noi",
+    "gpr", "vacancy", "concessions", "bad_debt", "net_collectible",
+})
+_YOY_PCT_KEYS = frozenset({
+    "eco_occ_pct", "physical_occ_pct",
+})
+# YoY delta is FAVORABLE when POSITIVE for these keys;
+# all others in _YOY_CURRENCY_KEYS are favorable when negative (costs/losses going down).
+_YOY_FAVORABLE_IF_POSITIVE = frozenset({
+    "actual_income", "actual_noi", "net_collectible", "gpr",
+    "eco_occ_pct", "physical_occ_pct",
+})
+
 
 def _ar_period_label(year: int, month: int) -> str:
     return f"{_AR_MONTH_ABBR.get(month, str(month))}-{year}"
@@ -159,15 +175,25 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
         q_kpis = [k for k in _kpis_for_quarter(kpis, yr, q) if not k.is_carveout]
         period_aggs[_quarter_label(yr, q)] = _aggregate(q_kpis)
 
+    # ── Annual aggregates and YoY year pairs ─────────────────────────────────
+    years_sorted = sorted({k.year for k in kpis if not k.is_carveout})
+    year_aggs: dict[int, dict] = {}
+    for yr in years_sorted:
+        yr_kpis = [k for k in kpis if k.year == yr and not k.is_carveout]
+        year_aggs[yr] = _aggregate(yr_kpis)
+    # One year pair per consecutive year: [(2023, 2024), (2024, 2025), ...]
+    year_pairs = [(years_sorted[i], years_sorted[i + 1])
+                  for i in range(len(years_sorted) - 1)]
+
     # ── Title ────────────────────────────────────────────────────────────────
     row = 1
     ws.cell(row, 1, f"{portfolio_name} — Portfolio Summary ({num_props} Properties)")
     ws.cell(row, 1).font = BOLD_FONT
     row += 2
 
-    # ── Transposed KPI table: KPI label | Q1-2024 | Q2-2024 | ... ───────────
+    # ── Transposed KPI table: KPI label | Q1-2024 | Q2-2024 | ... | YoY cols ─
     num_period_cols = len(period_labels)
-    total_kpi_cols = 1 + num_period_cols
+    total_kpi_cols = 1 + num_period_cols + len(year_pairs) * 2
 
     # Header row
     kpi_header_row = row
@@ -175,6 +201,14 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
     for col_idx, lbl in enumerate(period_labels, 2):
         cell = ws.cell(row, col_idx, lbl)
         cell.alignment = Alignment(horizontal="center")
+    # YoY column headers — two columns per year pair
+    for pair_idx, (prev_yr, curr_yr) in enumerate(year_pairs):
+        yoy_delta_col = 2 + num_period_cols + pair_idx * 2
+        yoy_pct_col   = yoy_delta_col + 1
+        cell = ws.cell(row, yoy_delta_col, f"YoY Δ\n{prev_yr}→{curr_yr}")
+        cell.alignment = Alignment(horizontal="center", wrap_text=True)
+        cell = ws.cell(row, yoy_pct_col, f"YoY % Chg\n{prev_yr}→{curr_yr}")
+        cell.alignment = Alignment(horizontal="center", wrap_text=True)
     style_header_row(ws, row, total_kpi_cols)
     row += 1
 
@@ -241,6 +275,37 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
                     cm.width = 320
                     cm.height = 100 + 14 * len(excluded_u)
                     c.comment = cm
+
+        # YoY columns — annual aggregate comparisons
+        for pair_idx, (prev_yr, curr_yr) in enumerate(year_pairs):
+            yoy_delta_col = 2 + num_period_cols + pair_idx * 2
+            yoy_pct_col   = yoy_delta_col + 1
+            if key in _YOY_CURRENCY_KEYS or key in _YOY_PCT_KEYS:
+                prev_val = year_aggs[prev_yr].get(key)
+                curr_val = year_aggs[curr_yr].get(key)
+                delta = (
+                    curr_val - prev_val
+                    if (curr_val is not None and prev_val is not None)
+                    else None
+                )
+                delta_cell = ws.cell(row, yoy_delta_col, delta)
+                delta_cell.number_format = fmt  # $ or % format matching the KPI row
+                if delta is not None:
+                    fav = key in _YOY_FAVORABLE_IF_POSITIVE
+                    apply_variance_fill(delta_cell, delta, favorable_is_positive=fav)
+                if key in _YOY_CURRENCY_KEYS:
+                    # % change column only for dollar-amount KPIs
+                    pct_chg = (
+                        delta / abs(prev_val)
+                        if (delta is not None and prev_val)
+                        else None
+                    )
+                    pct_cell = ws.cell(row, yoy_pct_col, pct_chg)
+                    pct_cell.number_format = PCT_FMT
+                    if pct_chg is not None:
+                        fav = key in _YOY_FAVORABLE_IF_POSITIVE
+                        apply_variance_fill(pct_cell, pct_chg, favorable_is_positive=fav)
+                # For PCT keys the % Chg column stays blank (pp delta is sufficient)
 
         if label in _GROUP_PARENTS:
             for col_idx in range(1, total_kpi_cols + 1):
@@ -319,7 +384,7 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
 # ─── Property Analysis ────────────────────────────────────────────────────────
 
 def _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target):
-    ws = wb.create_sheet("Property Analysis")
+    ws = wb.create_sheet("Property Quarterly KPIs")
     props = {k.property_name for k in kpis if not k.is_carveout}
     num_props = len(props)
 
@@ -335,7 +400,7 @@ def _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target):
         "Income/Unit", "Expense/Unit", "NOI/Unit",
         "Below Eco Occ Target?",
     ]
-    ws.cell(1, 1, f"{portfolio_name} — Property Analysis ({num_props} Properties)").font = BOLD_FONT
+    ws.cell(1, 1, f"{portfolio_name} — Property Quarterly KPIs ({num_props} Properties)").font = BOLD_FONT
     for col_idx, hdr in enumerate(headers, 1):
         cell = ws.cell(2, col_idx, hdr)
         add_kpi_comment(cell, hdr)
@@ -388,7 +453,7 @@ def _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target):
     # Wrap in an Excel Table for structured sorting/filtering
     if last_data_row >= 2:
         tab = Table(
-            displayName="PropertyAnalysisTable",
+            displayName="PropertyQtrKPIsTable",
             ref=f"A2:{get_column_letter(len(headers))}{last_data_row}",
         )
         tab.tableStyleInfo = TableStyleInfo(
@@ -462,11 +527,10 @@ def _build_monthly_kpis(wb, kpis):
         _c(ws, row, 29, k.expense_per_unit, CURRENCY_FMT)
         _c(ws, row, 30, k.noi_per_unit,     CURRENCY_FMT)
         ws.cell(row, 31, k.source_key)
-        # Re-apply variance fills to override base fill where applicable
-        apply_variance_fill(ws.cell(row, 9),  k.income_variance,   favorable_is_positive=True)
-        apply_variance_fill(ws.cell(row, 12), k.expense_variance,  favorable_is_positive=False)
-        apply_variance_fill(ws.cell(row, 15), k.noi_variance,      favorable_is_positive=True)
-        apply_variance_fill(ws.cell(row, 16), k.noi_variance_pct,  favorable_is_positive=True)
+        # Re-apply variance fill to % column only — $ amount variance columns are intentionally unstyled.
+        # Only highlight when variance exceeds ±5% threshold.
+        apply_variance_fill(ws.cell(row, 16), k.noi_variance_pct,
+                            favorable_is_positive=True, threshold=0.05)
         row += 1
 
     last_data_row = row - 1
@@ -901,11 +965,13 @@ def _write_dashboard_ar_summary(ws, ar_rows: list, start_row: int,
         period_aggs_ar = {(yr, mo): _agg(yr, mo) for (yr, mo) in periods}
 
         metric_defs = [
-            ("Current Owed", "current_owed", CURRENCY_FMT, False),
-            ("Pre-payments",  "prepayments",  CURRENCY_FMT, False),
-            ("% >60 Days",    "pct_overdue",  PCT_FMT,      False),
+            # (label, key, fmt, fav_pos, apply_yoy_fill)
+            # $ amount rows carry no fill; only % >60 Days YoY delta gets shading
+            ("Current Owed", "current_owed", CURRENCY_FMT, False, False),
+            ("Pre-payments",  "prepayments",  CURRENCY_FMT, False, False),
+            ("% >60 Days",    "pct_overdue",  PCT_FMT,      False, True),
         ]
-        for m_idx, (label, key, fmt, fav_pos) in enumerate(metric_defs):
+        for m_idx, (label, key, fmt, fav_pos, apply_yoy_fill) in enumerate(metric_defs):
             # Alternating ice-blue fill across data rows
             row_fill = _ICE_BLUE_FILL if m_idx % 2 == 0 else _WHITE_FILL
             for ci in range(1, num_cols + 1):
@@ -923,8 +989,10 @@ def _write_dashboard_ar_summary(ws, ar_rows: list, start_row: int,
                     if curr and prev and curr.get(key) is not None and prev.get(key) is not None:
                         delta = curr[key] - prev[key]
                         _c(ws, row, ci, delta, fmt)
-                        # Variance fill overrides the alternating fill
-                        apply_variance_fill(ws.cell(row, ci), delta, favorable_is_positive=fav_pos)
+                        if apply_yoy_fill:
+                            # >5% threshold: only colour % >60 Days delta when it exceeds ±5pp
+                            apply_variance_fill(ws.cell(row, ci), delta,
+                                                favorable_is_positive=fav_pos, threshold=0.05)
             row += 1
 
         row += 2  # blank rows between blocks
@@ -953,32 +1021,29 @@ def _apply_property_row_formats(ws, row, headers, agg):
 
 
 def _apply_property_variance_fills(ws, row, headers, agg):
-    """Re-apply green/red variance fills to variance columns after ice-blue base fill."""
+    """Re-apply green/red variance fills to % variance columns after ice-blue base fill.
+    $ amount variance columns (Income Variance, Expense Variance, NOI Variance) are
+    intentionally excluded — only % rate columns receive colour shading.
+    A ±5% threshold is applied: cells within the neutral band receive no fill."""
     variance_cols = {
-        "Income Variance":    True,    # favorable_is_positive
-        "Income Variance %":  True,
-        "Expense Variance":   False,   # favorable_is_negative
-        "Expense Variance %": False,
-        "NOI Variance":       True,
+        # $ amount variances intentionally omitted (no shading)
+        "Income Variance %":  True,   # favorable_is_positive
+        "Expense Variance %": False,  # favorable_is_negative (under budget = good)
         "NOI Variance %":     True,
         "Eco Occ Variance":   True,
     }
+    key_map = {
+        "Income Variance %":  "income_variance_pct",
+        "Expense Variance %": "expense_variance_pct",
+        "NOI Variance %":     "noi_variance_pct",
+        "Eco Occ Variance":   "eco_occ_variance",
+    }
     for col_idx, hdr in enumerate(headers, 1):
         if hdr in variance_cols:
-            val = agg.get(hdr.lower().replace(" ", "_").replace("%", "pct").replace("__", "_"))
-            # Map header to agg key directly
-            key_map = {
-                "Income Variance":    "income_variance",
-                "Income Variance %":  "income_variance_pct",
-                "Expense Variance":   "expense_variance",
-                "Expense Variance %": "expense_variance_pct",
-                "NOI Variance":       "noi_variance",
-                "NOI Variance %":     "noi_variance_pct",
-                "Eco Occ Variance":   "eco_occ_variance",
-            }
             val = agg.get(key_map[hdr])
             apply_variance_fill(ws.cell(row, col_idx), val,
-                                favorable_is_positive=variance_cols[hdr])
+                                favorable_is_positive=variance_cols[hdr],
+                                threshold=0.05)
 
 
 def _build_ar_aging(wb, ar_rows: list, portfolio_name: str) -> None:
@@ -1057,11 +1122,13 @@ def _build_ar_aging(wb, ar_rows: list, portfolio_name: str) -> None:
 
         # Three metric rows: Current Owed, Pre-payments, % >60 Days
         metric_defs = [
-            ("Current Owed", "current_owed", CURRENCY_FMT, False),
-            ("Pre-payments",  "prepayments",  CURRENCY_FMT, False),
-            ("% >60 Days",    "pct_overdue",  PCT_FMT,      False),
+            # (label, key, fmt, fav_pos, apply_yoy_fill)
+            # $ amount rows carry no fill; only % >60 Days YoY delta gets shading
+            ("Current Owed", "current_owed", CURRENCY_FMT, False, False),
+            ("Pre-payments",  "prepayments",  CURRENCY_FMT, False, False),
+            ("% >60 Days",    "pct_overdue",  PCT_FMT,      False, True),
         ]
-        for m_idx, (label, key, fmt, fav_pos) in enumerate(metric_defs):
+        for m_idx, (label, key, fmt, fav_pos, apply_yoy_fill) in enumerate(metric_defs):
             # Alternating ice-blue fill
             row_fill = _ICE_BLUE_FILL if m_idx % 2 == 0 else _WHITE_FILL
             for ci in range(1, num_cols + 1):
@@ -1078,8 +1145,10 @@ def _build_ar_aging(wb, ar_rows: list, portfolio_name: str) -> None:
                     if curr and prev and curr.get(key) is not None and prev.get(key) is not None:
                         delta = curr[key] - prev[key]
                         _c(ws, row, ci, delta, fmt)
-                        # Variance fill overrides the alternating fill
-                        apply_variance_fill(ws.cell(row, ci), delta, favorable_is_positive=fav_pos)
+                        if apply_yoy_fill:
+                            # >5% threshold: only colour % >60 Days delta when it exceeds ±5pp
+                            apply_variance_fill(ws.cell(row, ci), delta,
+                                                favorable_is_positive=fav_pos, threshold=0.05)
                     else:
                         ws.cell(row, ci, None)
             row += 1
@@ -1157,11 +1226,13 @@ def _build_ar_aging(wb, ar_rows: list, portfolio_name: str) -> None:
                 if prev:
                     co_delta = curr["current_owed"] - prev["current_owed"]
                     _c(ws, row, 6, co_delta, CURRENCY_FMT)
-                    apply_variance_fill(ws.cell(row, 6), co_delta, favorable_is_positive=False)
+                    # No variance fill on $ amount YoY column — only % >60 Days gets shading
                     if curr["pct_overdue"] is not None and prev["pct_overdue"] is not None:
                         pct_delta = curr["pct_overdue"] - prev["pct_overdue"]
                         _c(ws, row, 7, pct_delta, PCT_FMT)
-                        apply_variance_fill(ws.cell(row, 7), pct_delta, favorable_is_positive=False)
+                        # >5pp threshold for % >60 Days YoY delta
+                        apply_variance_fill(ws.cell(row, 7), pct_delta,
+                                            favorable_is_positive=False, threshold=0.05)
             row += 1
 
         # Excel Table for property analysis block (no freeze panes on AR Aging tab)

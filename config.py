@@ -8,6 +8,12 @@ MONTHS = {1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",
 
 QUARTERS = {"Q1":[1,2,3],"Q2":[4,5,6],"Q3":[7,8,9],"Q4":[10,11,12]}
 
+# Properties permanently excluded from ALL analyses — never surfaced in any run
+# regardless of user-provided exclusion list.
+PERMANENT_EXCLUSIONS: set[str] = {
+    "west hollywood housing, lp",
+}
+
 # KPI formula dictionary - drives hover tooltips (web) and Excel cell comments (workbooks)
 KPI_FORMULAS = {
     "Actual Income":

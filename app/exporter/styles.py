@@ -44,10 +44,17 @@ def add_kpi_comment(cell, kpi_name: str, author: str = "Portfolio Analyzer"):
         cell.comment = comment
 
 
-def apply_variance_fill(cell, value, favorable_is_positive: bool = True):
-    """Green if favorable, red if unfavorable."""
+def apply_variance_fill(cell, value, favorable_is_positive: bool = True,
+                        threshold: float = 0.0):
+    """Green if favorable, red if unfavorable.
+
+    threshold (default 0): abs(value) must EXCEED threshold before any fill is applied.
+    Pass threshold=0.05 to only colour cells where the variance exceeds ±5%.
+    """
     if value is None:
         return
+    if abs(value) <= threshold:
+        return  # within the neutral band — no highlight
     if favorable_is_positive:
         cell.fill = GREEN_FILL if value >= 0 else RED_FILL
     else:

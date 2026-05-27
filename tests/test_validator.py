@@ -16,23 +16,23 @@ def _make_workbook(tabs: list[str], tmp_path) -> str:
 
 
 def test_valid_zip(tmp_path):
-    path = _make_workbook(["Dashboard", "Property Analysis", "Property Monthly KPIs"], tmp_path)
-    checks = validate_workbook(path, {"Dashboard", "Property Analysis", "Property Monthly KPIs"})
+    path = _make_workbook(["Dashboard", "Property Quarterly KPIs", "Property Monthly KPIs"], tmp_path)
+    checks = validate_workbook(path, {"Dashboard", "Property Quarterly KPIs", "Property Monthly KPIs"})
     zip_check = next(c for c in checks if "Valid ZIP" in c.check_name)
     assert zip_check.passed
 
 
 def test_missing_tabs_flagged(tmp_path):
     path = _make_workbook(["Dashboard"], tmp_path)
-    checks = validate_workbook(path, {"Dashboard", "Property Analysis", "Property Monthly KPIs"})
+    checks = validate_workbook(path, {"Dashboard", "Property Quarterly KPIs", "Property Monthly KPIs"})
     tab_check = next(c for c in checks if "tabs" in c.check_name.lower())
     assert not tab_check.passed
-    assert "Property Analysis" in tab_check.detail
+    assert "Property Quarterly KPIs" in tab_check.detail
 
 
 def test_all_tabs_present(tmp_path):
-    path = _make_workbook(["Dashboard", "Property Analysis", "Property Monthly KPIs"], tmp_path)
-    checks = validate_workbook(path, {"Dashboard", "Property Analysis", "Property Monthly KPIs"})
+    path = _make_workbook(["Dashboard", "Property Quarterly KPIs", "Property Monthly KPIs"], tmp_path)
+    checks = validate_workbook(path, {"Dashboard", "Property Quarterly KPIs", "Property Monthly KPIs"})
     tab_check = next(c for c in checks if "tabs" in c.check_name.lower())
     assert tab_check.passed
 

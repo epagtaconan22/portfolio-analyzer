@@ -68,6 +68,25 @@ _SUMMARY_KPI_DEFINITIONS = [
     ("NOI/Unit",           "noi_per_unit",         "currency", None,  None,             False),
 ]
 
+# Keys eligible for YoY comparison in the web dashboard (mirrors main_workbook.py constants).
+# Currency keys get both a Δ$ value and a Δ% value; pct keys get Δpp only.
+_YOY_CURRENCY_KEYS = frozenset({
+    "actual_income", "actual_expenses", "actual_noi",
+    "gpr", "vacancy", "concessions", "bad_debt", "net_collectible",
+})
+_YOY_PCT_KEYS = frozenset({
+    "eco_occ_pct", "physical_occ_pct",
+})
+_YOY_FAVORABLE_IF_POSITIVE = frozenset({
+    "actual_income", "actual_noi", "net_collectible", "gpr",
+    "eco_occ_pct", "physical_occ_pct",
+})
+
+# % variance KPI keys that use a ±5% neutral band — no highlight within the band
+_PCT_VARIANCE_THRESHOLD_KEYS = frozenset({
+    "income_variance_pct", "expense_variance_pct", "noi_variance_pct", "eco_occ_variance",
+})
+
 
 # ── Quarter helpers ────────────────────────────────────────────────────────────
 
@@ -279,6 +298,16 @@ def show(run_id):
 
     latest_period_label = period_labels[-1] if period_labels else ""
 
+    # ── Annual aggregates and YoY pairs ───────────────────────────────────────
+    years_sorted = sorted({k["year"] for k in kpis if not k.get("is_carveout") and k.get("year")})
+    year_aggs: dict[int, dict] = {}
+    for yr in years_sorted:
+        yr_kpis = [k for k in kpis if k.get("year") == yr and not k.get("is_carveout")]
+        year_aggs[yr] = _agg_kpis(yr_kpis)
+    # One pair per consecutive year: [(2023, 2024), (2024, 2025), ...]
+    year_pairs = [(years_sorted[i], years_sorted[i + 1])
+                  for i in range(len(years_sorted) - 1)]
+
     summary_kpi_rows = []
     for defn in _SUMMARY_KPI_DEFINITIONS:
         if defn is None:
@@ -287,17 +316,48 @@ def show(run_id):
         label, key, fmt, fav, group_id, is_group_header = defn
         is_group_child = group_id is not None and not is_group_header
         values = [period_aggs.get(lbl, {}).get(key) for lbl in period_labels]
+
+        # Determine YoY type and per-pair deltas for this KPI row
+        if key in _YOY_CURRENCY_KEYS:
+            yoy_type = "currency"
+        elif key in _YOY_PCT_KEYS:
+            yoy_type = "pct"
+        else:
+            yoy_type = None
+
+        yoy_values = []
+        for (prev_yr, curr_yr) in year_pairs:
+            if yoy_type is not None:
+                prev_val = year_aggs.get(prev_yr, {}).get(key)
+                curr_val = year_aggs.get(curr_yr, {}).get(key)
+                delta    = (curr_val - prev_val
+                            if curr_val is not None and prev_val is not None
+                            else None)
+                pct_chg  = None
+                if yoy_type == "currency" and delta is not None and prev_val:
+                    pct_chg = delta / abs(prev_val)
+                yoy_values.append({
+                    "delta":              delta,
+                    "pct_chg":            pct_chg,
+                    "favorable_positive": key in _YOY_FAVORABLE_IF_POSITIVE,
+                })
+            else:
+                yoy_values.append({"delta": None, "pct_chg": None, "favorable_positive": None})
+
         summary_kpi_rows.append({
             "sep":               False,
             "label":             label,
             "key":               key,
             "fmt":               fmt,
             "favorable_positive": fav,
+            "color_threshold":   0.05 if key in _PCT_VARIANCE_THRESHOLD_KEYS else 0.0,
             "tooltip":           _KPI_TOOLTIPS.get(label, ""),
             "period_values":     values,
             "group_id":          group_id,
             "is_group_header":   is_group_header,
             "is_group_child":    is_group_child,
+            "yoy_type":          yoy_type,
+            "yoy_values":        yoy_values,
         })
 
     # ── Property table ─────────────────────────────────────────────────────────
@@ -421,6 +481,7 @@ def show(run_id):
         years=years,
         properties=props,
         num_properties=len(props),
+        year_pairs=year_pairs,
         # AR Aging context
         ar_summary=ar_summary,
         ar_prop_rows=ar_prop_rows,

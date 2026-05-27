@@ -213,6 +213,17 @@ body {
 .kpi-transposed td:not(.kpi-label) {
   text-align: right;
 }
+/* YoY comparison columns — subtle lavender tint to distinguish from period columns */
+.yoy-col {
+  background-color: #f3f0fa;
+  border-left: 2px solid #d1c4e9;
+}
+thead .yoy-col {
+  background-color: #7b5ea7 !important;  /* muted purple header, distinct from navy period headers */
+  color: #ffffff;
+  border-left: 2px solid #ffffff;
+}
+
 /* Property count sub-text inside period column headers */
 .period-prop-count {
   display: block;

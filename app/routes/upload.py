@@ -16,7 +16,7 @@ from app.exporter.backup_workbook import build_backup_workbook
 from app.exporter.validator import validate_both_workbooks
 from app.storage.runs import new_run_id, save_run
 from app.models import QualityCheck
-from config import ECO_OCC_TARGET, QUARTERS, PROPERTY_NAME_MAP, MONTHS
+from config import ECO_OCC_TARGET, QUARTERS, PROPERTY_NAME_MAP, MONTHS, PERMANENT_EXCLUSIONS
 
 bp = Blueprint("upload", __name__)
 ALLOWED_EXT = {".xlsx", ".xls"}
@@ -36,7 +36,8 @@ def run_analysis():
     excluded_raw   = request.form.get("excluded_properties", "").strip()
     carveout_raw   = request.form.get("carveout_properties", "").strip()
 
-    excluded  = {p.strip().lower() for p in excluded_raw.splitlines() if p.strip()}
+    excluded  = ({p.strip().lower() for p in excluded_raw.splitlines() if p.strip()}
+                 | PERMANENT_EXCLUSIONS)
     carveouts = {p.strip().lower() for p in carveout_raw.splitlines() if p.strip()}
 
     fin_files = request.files.getlist("financial_files")
