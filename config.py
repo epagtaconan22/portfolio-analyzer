@@ -257,6 +257,8 @@ ACCOUNT_MAPPING_RULES = [
     ("moving",            "Operating Expense", "Expense", True, False),
     # Concession-style items
     ("free unit",         "Concessions", "Contra-Income", True, True),
+    # Manager's unit — treated as a payroll/compensation expense, not a concession
+    ("admin free unit",   "Operating Expense", "Expense", True, False),
     # Interest income (non-operating, exclude from NOI)
     ("interest income",   "Excluded", "Excluded", False, False),
     ("oth inc-interest",  "Excluded", "Excluded", False, False),
