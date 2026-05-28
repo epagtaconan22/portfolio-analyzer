@@ -47,10 +47,11 @@ def calculate_noi(mapped_rows: list[MappedRow]) -> list[PropertyPeriodKPIs]:
             income_acc[key] -= amount
             account_acc[key + (row.account_name,)] -= amount
         elif row.treatment == "Expense":
-            # Normalize: amount should be positive = a cost
-            amount = abs(row.amount)
-            expense_acc[key] += amount
-            account_acc[key + (row.account_name,)] -= amount  # negative = cost in driver analysis
+            # Use the signed amount directly. Positive = cost (the normal case).
+            # Negative = credit/reversal — it should reduce the expense total, not add to it.
+            # Do NOT abs() here: abs()-ing credits double-counts them as costs.
+            expense_acc[key] += row.amount
+            account_acc[key + (row.account_name,)] -= row.amount  # negative = cost in driver analysis
 
     # Collect all (property, pm, year, month) combos from income and expense accumulators.
     # account_acc keys are a strict superset so they don't need to be included here.

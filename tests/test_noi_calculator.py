@@ -74,6 +74,18 @@ def test_multi_property_separate_kpis():
     props = {k.property_name for k in kpis}
     assert "Prop A" in props and "Prop B" in props
 
+def test_expense_credit_reduces_expenses():
+    """Negative expense rows (credits/reversals) must reduce expenses, not inflate them."""
+    rows = [
+        _make_row("Rental Income", "Income", 10000),
+        _make_row("Operating Expense", "Expense", 4000),   # normal cost
+        _make_row("Operating Expense", "Expense", -500),   # credit/reversal
+    ]
+    kpis = calculate_noi(rows)
+    k = next(x for x in kpis if x.month == 1)
+    assert k.actual_expenses == pytest.approx(3500)        # 4000 - 500
+    assert k.actual_noi == pytest.approx(6500)             # 10000 - 3500
+
 def test_top_two_drivers_identified():
     rows = [
         _make_row("Rental Income", "Income", 10000, source_type="Actual", account_name="Gross Potential Rent"),
