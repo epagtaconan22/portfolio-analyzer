@@ -1,6 +1,6 @@
 """Maps raw account names to buckets using keyword rules from config."""
 
-from config import ACCOUNT_MAPPING_RULES
+from config import ACCOUNT_MAPPING_RULES, JSCO_ACCOUNT_CODE_RULES
 from app.models import RawRow, MappedRow, MappingEntry
 
 # (category, treatment, include_in_noi, include_in_eco_occ)
@@ -10,17 +10,33 @@ MappingTuple = tuple[str, str, bool, bool]
 def map_account_name(
     account_name: str,
     custom_mapping: dict[str, MappingTuple] | None = None,
+    account_code: str = "",
 ) -> MappingTuple:
     """
     Returns (category, treatment, include_in_noi, include_in_eco_occ).
+
+    Lookup priority:
+      1. custom_mapping (user-uploaded CSV overrides)
+      2. JSCO_ACCOUNT_CODE_RULES (MR-prefix code exact match)
+      3. ACCOUNT_MAPPING_RULES (keyword substring match on account name)
+      4. "Review Needed" fallback
+
     custom_mapping keys are lowercase account names.
     """
     name_lower = account_name.lower().strip()
 
+    # 1. User-provided custom mapping takes highest priority.
     if custom_mapping:
         if name_lower in custom_mapping:
             return custom_mapping[name_lower]
 
+    # 2. JSCO code-based exact match (MR-prefix codes are deterministic).
+    if account_code:
+        code_upper = account_code.upper().strip()
+        if code_upper in JSCO_ACCOUNT_CODE_RULES:
+            return JSCO_ACCOUNT_CODE_RULES[code_upper]
+
+    # 3. Keyword substring matching on account name.
     for keyword, category, treatment, in_noi, in_eco in ACCOUNT_MAPPING_RULES:
         if keyword in name_lower:
             return category, treatment, in_noi, in_eco
@@ -41,7 +57,7 @@ def map_rows(
 
     for row in raw_rows:
         cat, treatment, in_noi, in_eco = map_account_name(
-            row.account_name, custom_mapping
+            row.account_name, custom_mapping, account_code=row.account_code
         )
         kpi_mapping = _kpi_mapping_label(cat)
 

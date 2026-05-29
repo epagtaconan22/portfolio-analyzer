@@ -4,7 +4,7 @@ _ACTUAL_BUDGET_PATTERNS = ["actual vs budget", "actual/budget", "act vs bud", "a
 # Include leading-edge variants so "Act 2024" / "Bud Q1" sheet names match.
 # "statement" covers Yardi "12 Month Statement-{code}" sheet names.
 _ACTUAL_PATTERNS = ["actual", "actuals", " act ", "act ", "statement"]
-_BUDGET_PATTERNS = ["budget", "budgeted", " bud ", "bud "]
+_BUDGET_PATTERNS = ["budget", "budgeted", " bud ", "bud ", "forecast"]
 
 
 def infer_sheet_type(sheet_name: str, header_row: list[str], title_rows: list[list]) -> str:

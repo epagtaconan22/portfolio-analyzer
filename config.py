@@ -314,6 +314,121 @@ ACCOUNT_MAPPING_RULES = [
     ("returned check",    "Other Income", "Income", True, False),
 ]
 
+# JSCO/VOTP account code rules — MR-prefix codes used by John Stewart Company.
+# These are checked BEFORE keyword rules in account_mapper.map_account_name() when
+# the account code is non-empty. Keys are uppercase MR-prefix codes (exact match).
+# Value tuples: (category, treatment, include_in_noi, include_in_eco_occ)
+JSCO_ACCOUNT_CODE_RULES: dict[str, tuple[str, str, bool, bool]] = {
+    # ── Rental Income / GPR ──────────────────────────────────────────────
+    "MR5120000": ("Rental Income",  "Income",        True,  True),
+    "MR5122000": ("Rental Income",  "Income",        True,  True),
+    # ── Concessions ─────────────────────────────────────────────────────
+    "MR5123000": ("Concessions",    "Contra-Income", True,  True),
+    # ── Other Income ────────────────────────────────────────────────────
+    "MR5125000": ("Other Income",   "Income",        True,  False),  # Lease-break penalties
+    "MR5422000": ("Other Income",   "Income",        True,  False),
+    # ── Excluded (non-operating financial items) ─────────────────────────
+    "MR5440000": ("Excluded",       "Excluded",      False, False),
+    # ── Vacancy / Contra-Income ──────────────────────────────────────────
+    "MR5220000": ("Vacancy",        "Contra-Income", True,  True),
+    "MR5225000": ("Vacancy",        "Contra-Income", True,  True),   # Employee Unit Loss
+    # ── Bad Debt (gross-up: income side + expense side both feed eco-occ) ─
+    "MR5221000": ("Bad Debt",       "Contra-Income", True,  True),   # Collection Loss (income)
+    "MR6370000": ("Bad Debt",       "Contra-Income", True,  True),   # Collection Loss (expense gross-up)
+    # ── Other Income (MR59xx) ────────────────────────────────────────────
+    "MR5910000": ("Other Income",   "Income",        True,  False),
+    "MR5920000": ("Other Income",   "Income",        True,  False),
+    "MR5925000": ("Other Income",   "Income",        True,  False),
+    "MR5930000": ("Other Income",   "Income",        True,  False),
+    "MR5940000": ("Other Income",   "Income",        True,  False),
+    "MR5990000": ("Other Income",   "Income",        True,  False),
+    # ── Marketing (Operating Expense) ────────────────────────────────────
+    "MR6210000": ("Operating Expense", "Expense", True, False),
+    "MR6250000": ("Operating Expense", "Expense", True, False),
+    # ── Administrative (Operating Expense) ───────────────────────────────
+    "MR6310000": ("Operating Expense", "Expense", True, False),
+    "MR6310010": ("Operating Expense", "Expense", True, False),
+    "MR6311000": ("Operating Expense", "Expense", True, False),
+    "MR6319000": ("Operating Expense", "Expense", True, False),
+    "MR6320000": ("Operating Expense", "Expense", True, False),
+    "MR6325000": ("Operating Expense", "Expense", True, False),
+    "MR6326000": ("Operating Expense", "Expense", True, False),
+    "MR6330000": ("Operating Expense", "Expense", True, False),
+    "MR6335000": ("Operating Expense", "Expense", True, False),
+    "MR6340000": ("Operating Expense", "Expense", True, False),
+    "MR6350000": ("Operating Expense", "Expense", True, False),
+    "MR6351000": ("Operating Expense", "Expense", True, False),
+    "MR6360000": ("Operating Expense", "Expense", True, False),
+    "MR6363000": ("Operating Expense", "Expense", True, False),
+    "MR6385000": ("Operating Expense", "Expense", True, False),
+    "MR6390000": ("Operating Expense", "Expense", True, False),
+    "MR6390010": ("Operating Expense", "Expense", True, False),
+    "MR6390015": ("Operating Expense", "Expense", True, False),
+    "MR6390030": ("Operating Expense", "Expense", True, False),
+    "MR6392000": ("Operating Expense", "Expense", True, False),
+    "MR6396000": ("Operating Expense", "Expense", True, False),
+    # ── Utilities ────────────────────────────────────────────────────────
+    "MR6450000": ("Operating Expense", "Expense", True, False),
+    "MR6451000": ("Operating Expense", "Expense", True, False),
+    "MR6452000": ("Operating Expense", "Expense", True, False),
+    "MR6453000": ("Operating Expense", "Expense", True, False),
+    # ── Operations & Maintenance ──────────────────────────────────────────
+    "MR6510000": ("Operating Expense", "Expense", True, False),
+    "MR6512000": ("Operating Expense", "Expense", True, False),
+    "MR6515000": ("Operating Expense", "Expense", True, False),
+    "MR6517000": ("Operating Expense", "Expense", True, False),
+    "MR6519000": ("Operating Expense", "Expense", True, False),
+    "MR6525000": ("Operating Expense", "Expense", True, False),
+    "MR6530000": ("Operating Expense", "Expense", True, False),
+    "MR6533000": ("Operating Expense", "Expense", True, False),
+    "MR6537000": ("Operating Expense", "Expense", True, False),
+    "MR6541000": ("Operating Expense", "Expense", True, False),
+    "MR6542000": ("Operating Expense", "Expense", True, False),
+    "MR6543000": ("Operating Expense", "Expense", True, False),
+    "MR6545000": ("Operating Expense", "Expense", True, False),
+    "MR6561000": ("Operating Expense", "Expense", True, False),
+    "MR6573000": ("Operating Expense", "Expense", True, False),
+    "MR6590000": ("Operating Expense", "Expense", True, False),
+    "MR6591000": ("Operating Expense", "Expense", True, False),
+    # ── Taxes & Insurance ────────────────────────────────────────────────
+    "MR6710000": ("Operating Expense", "Expense", True, False),
+    "MR6711000": ("Operating Expense", "Expense", True, False),
+    "MR6720000": ("Operating Expense", "Expense", True, False),
+    "MR6721000": ("Operating Expense", "Expense", True, False),
+    "MR6722000": ("Operating Expense", "Expense", True, False),
+    "MR6723000": ("Operating Expense", "Expense", True, False),
+    "MR6723010": ("Operating Expense", "Expense", True, False),
+    "MR6790000": ("Operating Expense", "Expense", True, False),
+    # ── Insurance Claims (operating) ─────────────────────────────────────
+    "MR6802000": ("Operating Expense", "Expense", True, False),
+    # ── Resident Credit Reporting (operating) ────────────────────────────
+    "MR6885000": ("Operating Expense", "Expense", True, False),
+    # ── Service Expense ──────────────────────────────────────────────────
+    "MR6960000": ("Operating Expense", "Expense", True, False),
+    "MR6980000": ("Operating Expense", "Expense", True, False),
+    "MR6993010": ("Operating Expense", "Expense", True, False),
+    # ── Reserves / Capital (Excluded) ────────────────────────────────────
+    "MR6610000": ("Excluded", "Excluded", False, False),
+    "MR6610030": ("Excluded", "Excluded", False, False),
+    "MR6620000": ("Excluded", "Excluded", False, False),
+    # ── Debt Service (Excluded) ───────────────────────────────────────────
+    "MR6820000": ("Excluded", "Excluded", False, False),
+    "MR6820013": ("Excluded", "Excluded", False, False),
+    "MR6820014": ("Excluded", "Excluded", False, False),
+    "MR6846000": ("Excluded", "Excluded", False, False),
+    "MR6851045": ("Excluded", "Excluded", False, False),
+    # ── Corporate / AHG Fees / State Tax (Excluded) ──────────────────────
+    "MR7131000": ("Excluded", "Excluded", False, False),
+    "MR7133000": ("Excluded", "Excluded", False, False),  # Asset Mgmt Fee (AHG)
+    "MR7134010": ("Excluded", "Excluded", False, False),
+    "MR7137000": ("Excluded", "Excluded", False, False),  # Partnership Mgmt Fee (AHG)
+    # ── Replacement Expenditures (Excluded) ──────────────────────────────
+    "MR7220000": ("Excluded", "Excluded", False, False),
+    "MR7230000": ("Excluded", "Excluded", False, False),
+    "MR7235000": ("Excluded", "Excluded", False, False),
+    "MR7240000": ("Excluded", "Excluded", False, False),
+}
+
 # Canonical property name map — normalizes the raw names the parser infers from
 # sheet names / Yardi title rows to the short display names used in the web app
 # and Excel workbooks.  Keys are the exact strings the parser may produce;
