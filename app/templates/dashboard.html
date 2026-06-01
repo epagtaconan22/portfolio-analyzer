@@ -479,29 +479,54 @@ function toggleKpiGroup(groupId) {
     });
   };
 
-  /* Returns true if the majority of non-empty cells in the column look numeric */
+  /* Returns true if this column should sort numerically.
+     Primary: any cell in the column carries class="currency" or class="pct" — these
+              classes are applied by the server-side templates to every money/percent cell,
+              so the check is reliable even when most cells show "—".
+     Fallback: scan all rows and apply the ≥50% heuristic. */
   SortFilter.prototype.isNumeric = function (colIdx) {
+    for (var i = 0; i < this.rows.length; i++) {
+      var cell = this.rows[i].cells[colIdx];
+      if (!cell) continue;
+      var cls = ' ' + cell.className + ' ';
+      if (cls.indexOf(' currency ') >= 0 || cls.indexOf(' pct ') >= 0) return true;
+    }
+    /* Heuristic fallback (catches ad-hoc tables without explicit class markers) */
     var hits = 0, checks = 0;
-    for (var i = 0; i < Math.min(this.rows.length, 10); i++) {
+    for (var i = 0; i < this.rows.length; i++) {
       var cell = this.rows[i].cells[colIdx];
       if (!cell) continue;
       var txt = cell.textContent.trim();
       if (!txt || txt === '—' || txt === 'N/A' || txt === 'Not Available') continue;
       checks++;
-      var clean = txt.replace(/[$,%\s]/g, '').replace(/,/g, '').replace(/[()]/g, '');
+      var clean = txt.replace(/[$%\s,]/g, '').replace(/[()]/g, '');
       if (!isNaN(parseFloat(clean))) hits++;
     }
     return checks > 0 && hits / checks >= 0.5;
   };
 
-  /* Parse a displayed cell value into a float, handling $, %, commas, parens */
+  /* Parse a displayed cell value into a signed float.
+     Handles: "$1,234"  →  1234
+              "$-1,234" → -1234   (Python formats negatives as $-N, not ($N))
+              "($1,234)"→ -1234   (Excel-style parenthesised negative)
+              "95.5%"   →  0.955
+     Bug fix: the old code checked for a leading "-" BEFORE stripping "$", so
+     "$-1,234" was mis-classified as positive and stripped of its minus sign. */
   SortFilter.prototype._num = function (txt) {
     if (!txt || txt === '—' || txt === 'N/A' || txt === 'Not Available') return null;
-    var t   = txt.trim();
-    var neg = /^\(/.test(t) || /^-/.test(t);
-    var clean = t.replace(/[$,%\s]/g, '').replace(/,/g, '').replace(/[()]/g, '').replace(/^[+-]/, '');
+    var t = txt.trim();
+    /* Detect parenthesised-negative form BEFORE any stripping */
+    var parens = /^\(.*\)$/.test(t);
+    /* Strip currency symbol, percent, spaces, and commas — keep "-" so parseFloat
+       can handle "$-1,234" → "-1234" correctly */
+    var clean = t.replace(/[$%\s,]/g, '').replace(/[()]/g, '');
+    /* Convert "95.5%" to a decimal fraction */
+    var isPct = txt.indexOf('%') >= 0;
     var v = parseFloat(clean);
-    return isNaN(v) ? null : (neg ? -v : v);
+    if (isNaN(v)) return null;
+    if (isPct) v = v / 100;
+    /* Parenthesised form is always negative regardless of its numeric sign */
+    return (parens && v > 0) ? -v : v;
   };
 
   SortFilter.prototype.setSort = function (colIdx, dir) {
