@@ -121,7 +121,7 @@ def _build_budget_vs_actual(wb, kpis):
     _write_header(ws, headers, 1)
     currency_cols = {7, 8, 9, 11, 12, 13, 15, 16, 17, 19, 20, 21}
     pct_cols      = {10, 14, 18}
-    for i, k in enumerate(sorted(kpis, key=lambda x: (x.property_name, x.year, x.month)), 2):
+    for i, k in enumerate(sorted(kpis, key=lambda x: (x.property_name, -x.year, -x.month)), 2):
         vals = [
             k.property_name, k.pm_name,
             k.total_units if k.total_units is not None else "N/A",
@@ -164,7 +164,8 @@ def _build_account_detail(wb, mapped_rows):
 
     all_keys = set(act.keys()) | set(bud.keys())
     row = 2
-    for key in sorted(all_keys):
+    # Sort: property A-Z, then newest year/month first, then account name A-Z
+    for key in sorted(all_keys, key=lambda k: (k[0], k[1], -k[2], -k[3], k[4], k[5])):
         prop, pm, yr, mo, code, name, kpi = key
         actual_amt = act.get(key)
         budget_amt = bud.get(key)
@@ -193,7 +194,7 @@ def _build_economic_occupancy(wb, kpis):
         "Total Units",
     ]
     _write_header(ws, headers, 1)
-    for i, k in enumerate(sorted(kpis, key=lambda x: (x.property_name, x.year, x.month)), 2):
+    for i, k in enumerate(sorted(kpis, key=lambda x: (x.property_name, -x.year, -x.month)), 2):
         ws.cell(i, 1, k.property_name); ws.cell(i, 2, k.pm_name)
         ws.cell(i, 3, k.year);          ws.cell(i, 4, k.month); ws.cell(i, 5, k.period)
         ws.cell(i, 6, k.gpr);           ws.cell(i, 6).number_format = CURRENCY_FMT
@@ -258,8 +259,8 @@ def _build_ar_aging_detail(wb, ar_rows: list) -> None:
         ws.cell(2, 1, "No AR Aging data was uploaded for this analysis.")
         return
 
-    # Sort: Receivable Type, Property Name, Year, Month
-    sorted_rows = sorted(ar_rows, key=lambda r: (r.receivable_type, r.property_name, r.year, r.month))
+    # Sort: Receivable Type, Property Name, then newest period first
+    sorted_rows = sorted(ar_rows, key=lambda r: (r.receivable_type, r.property_name, -r.year, -r.month))
 
     for i, r in enumerate(sorted_rows, 2):
         charge   = r.charge_amount

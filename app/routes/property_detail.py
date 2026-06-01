@@ -23,6 +23,8 @@ def show(run_id, property_name):
     prop_kpis = [k for k in data["kpis"] if k["property_name"] == property_name]
     if not prop_kpis:
         abort(404)
+    # Newest period first
+    prop_kpis.sort(key=lambda k: (-k["year"], -k["month"]))
 
     # Build AR aging detail for this property
     # AR rows are stored as dicts; @property fields (total_overdue, pct_overdue)
@@ -37,7 +39,8 @@ def show(run_id, property_name):
         r["pct_overdue"] = (r["total_overdue"] / charge) if charge and charge > 0 else None
         r["period_label"] = _ar_period_label(r["year"], r["month"])
 
-    prop_ar.sort(key=lambda r: (r["receivable_type"], r["year"], r["month"]))
+    # Newest period first within each receivable type
+    prop_ar.sort(key=lambda r: (r["receivable_type"], -r["year"], -r["month"]))
 
     # Split into sub-dicts by receivable type for template simplicity
     ar_by_type = {}

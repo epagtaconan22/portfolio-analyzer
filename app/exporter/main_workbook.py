@@ -81,11 +81,11 @@ def _quarter_label(year: int, quarter: int) -> str:
 
 
 def _get_sorted_quarters(kpis) -> list[tuple[int, int]]:
-    """Return sorted list of (year, quarter) tuples present in the KPI list."""
+    """Return (year, quarter) tuples present in the KPI list, newest first."""
     quarters: set[tuple[int, int]] = set()
     for k in kpis:
         quarters.add((k.year, _month_to_quarter(k.month)))
-    return sorted(quarters)
+    return sorted(quarters, reverse=True)
 
 
 def _kpis_for_quarter(kpis, year: int, quarter: int) -> list:
@@ -490,7 +490,7 @@ def _build_monthly_kpis(wb, kpis):
     style_header_row(ws, 1, len(headers))
 
     row = 2
-    for data_row_idx, k in enumerate(sorted(kpis, key=lambda x: (x.property_name, x.year, x.month))):
+    for data_row_idx, k in enumerate(sorted(kpis, key=lambda x: (x.property_name, -x.year, -x.month))):
         # Alternating ice-blue fill
         row_fill = _ICE_BLUE_FILL if data_row_idx % 2 == 0 else _WHITE_FILL
         for ci in range(1, len(headers) + 1):

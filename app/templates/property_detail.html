@@ -32,7 +32,7 @@
       </tr>
     </thead>
     <tbody>
-      {% for k in kpis | sort(attribute='month') %}
+      {% for k in kpis %}
       <tr>
         <td>{{ k.year }}</td>
         <td>{{ k.period }}</td>

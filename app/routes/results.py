@@ -281,7 +281,8 @@ def show(run_id):
     for k in kpis:
         if not k.get("is_carveout") and k.get("year") and k.get("month"):
             all_quarters.add((k["year"], _month_to_quarter(k["month"])))
-    sorted_quarters = sorted(all_quarters)
+    # Newest period first (e.g. Q1-2026, Q4-2025, Q3-2025, …)
+    sorted_quarters = sorted(all_quarters, reverse=True)
     period_labels = [_quarter_label(yr, q) for (yr, q) in sorted_quarters]
 
     period_aggs: dict[str, dict] = {}
@@ -296,7 +297,8 @@ def show(run_id):
         period_aggs[lbl] = _agg_kpis(q_kpis)
         period_property_counts[lbl] = len({k["property_name"] for k in q_kpis})
 
-    latest_period_label = period_labels[-1] if period_labels else ""
+    # With descending sort, index 0 is the most recent period
+    latest_period_label = period_labels[0] if period_labels else ""
 
     # ── Annual aggregates and YoY pairs ───────────────────────────────────────
     years_sorted = sorted({k["year"] for k in kpis if not k.get("is_carveout") and k.get("year")})
