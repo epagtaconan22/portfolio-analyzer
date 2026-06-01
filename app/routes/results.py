@@ -394,8 +394,9 @@ def show(run_id):
 
     if ar_rows:
         for rtype in ["Tenant Rent", "Subsidy"]:
+            # Newest period first so columns read right-to-left chronologically
             periods = sorted({(r["year"], r["month"]) for r in ar_rows
-                              if r["receivable_type"] == rtype})
+                              if r["receivable_type"] == rtype}, reverse=True)
             if not periods:
                 continue
             period_set = set(periods)

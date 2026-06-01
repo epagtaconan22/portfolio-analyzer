@@ -1055,18 +1055,19 @@ def _build_ar_aging(wb, ar_rows: list, portfolio_name: str) -> None:
         ws.cell(1, 1).font = BOLD_FONT
         return
 
-    # Sorted unique periods across all rows
-    periods = sorted({(r.year, r.month) for r in ar_rows})
+    # Unique periods — newest first so columns read newest-to-oldest
+    periods = sorted({(r.year, r.month) for r in ar_rows}, reverse=True)
     periods_set = set(periods)
 
-    # Build column sequence: alternating period / yoy-delta columns
+    # Build column sequence: each period followed by its YoY delta (if prior year present)
     col_seq: list[tuple] = []
     for (yr, mo) in periods:
         col_seq.append(("period", yr, mo))
         if (yr - 1, mo) in periods_set:
             col_seq.append(("yoy", yr, mo))
 
-    latest_yr, latest_mo = periods[-1]
+    # With descending sort, index 0 is the most recent period
+    latest_yr, latest_mo = periods[0]
     latest_label = _ar_period_label(latest_yr, latest_mo)
     prior_period = (latest_yr - 1, latest_mo) if (latest_yr - 1, latest_mo) in periods_set else None
 
