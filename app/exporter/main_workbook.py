@@ -389,7 +389,7 @@ def _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target):
     num_props = len(props)
 
     headers = [
-        "Property", "Property Manager", "Period", "Total Units",
+        "Property", "Property Manager", "City", "Tenancy Type", "Period", "Total Units",
         "Actual Income", "Budget Income", "Income Variance", "Income Variance %",
         "Actual Expenses", "Budget Expenses", "Expense Variance", "Expense Variance %",
         "Actual NOI", "Budget NOI", "NOI Variance", "NOI Variance %",
@@ -423,7 +423,8 @@ def _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target):
             pm = group[0].pm_name
             is_below = (agg.get("eco_occ_pct") or 0) < eco_occ_target and agg.get("eco_occ_pct") is not None
             row_data = [
-                prop_name, pm, period_lbl, agg.get("total_units") or "Not Available",
+                prop_name, pm, group[0].city, group[0].tenancy_type,
+                period_lbl, agg.get("total_units") or "Not Available",
                 agg.get("actual_income"), agg.get("budget_income"),
                 agg.get("income_variance"), agg.get("income_variance_pct"),
                 agg.get("actual_expenses"), agg.get("budget_expenses"),
@@ -463,7 +464,7 @@ def _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target):
         )
         ws.add_table(tab)
 
-    ws.freeze_panes = "D3"
+    ws.freeze_panes = "F3"
     _autofit_columns(ws)
 
 
@@ -472,7 +473,7 @@ def _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target):
 def _build_monthly_kpis(wb, kpis):
     ws = wb.create_sheet("Property Monthly KPIs")
     headers = [
-        "Property", "Property Manager", "Year", "Month", "Period",
+        "Property", "Property Manager", "City", "Tenancy Type", "Year", "Month", "Period",
         "Total Units",
         "Actual Income", "Budget Income", "Income Variance",
         "Actual Expenses", "Budget Expenses", "Expense Variance",
@@ -498,38 +499,40 @@ def _build_monthly_kpis(wb, kpis):
 
         ws.cell(row, 1,  k.property_name)
         ws.cell(row, 2,  k.pm_name)
-        ws.cell(row, 3,  k.year)
-        ws.cell(row, 4,  k.month)
-        ws.cell(row, 5,  k.period)
-        ws.cell(row, 6,  k.total_units if k.total_units is not None else "N/A")
-        _c(ws, row, 7,  k.actual_income,   CURRENCY_FMT)
-        _c(ws, row, 8,  k.budget_income,   CURRENCY_FMT)
-        _c(ws, row, 9,  k.income_variance, CURRENCY_FMT)
-        _c(ws, row, 10, k.actual_expenses,  CURRENCY_FMT)
-        _c(ws, row, 11, k.budget_expenses,  CURRENCY_FMT)
-        _c(ws, row, 12, k.expense_variance, CURRENCY_FMT)
-        _c(ws, row, 13, k.actual_noi,       CURRENCY_FMT)
-        _c(ws, row, 14, k.budget_noi,       CURRENCY_FMT)
-        _c(ws, row, 15, k.noi_variance,     CURRENCY_FMT)
-        _c(ws, row, 16, k.noi_variance_pct, VAR_PCT_FMT)
-        _c(ws, row, 17, k.gpr,              CURRENCY_FMT)
-        _c(ws, row, 18, k.vacancy,          CURRENCY_FMT)
-        _c(ws, row, 19, k.concessions,      CURRENCY_FMT)
-        _c(ws, row, 20, k.bad_debt,         CURRENCY_FMT)
-        _c(ws, row, 21, k.net_collectible,  CURRENCY_FMT)
-        _c(ws, row, 22, k.eco_occ_pct,      PCT_FMT)
-        _c(ws, row, 23, k.physical_occ_pct, PCT_FMT)
-        _c(ws, row, 24, k.leakage_gap,      PCT_FMT)
-        _c(ws, row, 25, k.yoy_physical_occ_variance, PCT_FMT)
-        _c(ws, row, 26, k.yoy_eco_occ_variance,      PCT_FMT)
-        _c(ws, row, 27, k.yoy_leakage_gap_change,    PCT_FMT)
-        _c(ws, row, 28, k.income_per_unit,  CURRENCY_FMT)
-        _c(ws, row, 29, k.expense_per_unit, CURRENCY_FMT)
-        _c(ws, row, 30, k.noi_per_unit,     CURRENCY_FMT)
-        ws.cell(row, 31, k.source_key)
+        ws.cell(row, 3,  k.city)
+        ws.cell(row, 4,  k.tenancy_type)
+        ws.cell(row, 5,  k.year)
+        ws.cell(row, 6,  k.month)
+        ws.cell(row, 7,  k.period)
+        ws.cell(row, 8,  k.total_units if k.total_units is not None else "N/A")
+        _c(ws, row, 9,  k.actual_income,   CURRENCY_FMT)
+        _c(ws, row, 10, k.budget_income,   CURRENCY_FMT)
+        _c(ws, row, 11, k.income_variance, CURRENCY_FMT)
+        _c(ws, row, 12, k.actual_expenses,  CURRENCY_FMT)
+        _c(ws, row, 13, k.budget_expenses,  CURRENCY_FMT)
+        _c(ws, row, 14, k.expense_variance, CURRENCY_FMT)
+        _c(ws, row, 15, k.actual_noi,       CURRENCY_FMT)
+        _c(ws, row, 16, k.budget_noi,       CURRENCY_FMT)
+        _c(ws, row, 17, k.noi_variance,     CURRENCY_FMT)
+        _c(ws, row, 18, k.noi_variance_pct, VAR_PCT_FMT)
+        _c(ws, row, 19, k.gpr,              CURRENCY_FMT)
+        _c(ws, row, 20, k.vacancy,          CURRENCY_FMT)
+        _c(ws, row, 21, k.concessions,      CURRENCY_FMT)
+        _c(ws, row, 22, k.bad_debt,         CURRENCY_FMT)
+        _c(ws, row, 23, k.net_collectible,  CURRENCY_FMT)
+        _c(ws, row, 24, k.eco_occ_pct,      PCT_FMT)
+        _c(ws, row, 25, k.physical_occ_pct, PCT_FMT)
+        _c(ws, row, 26, k.leakage_gap,      PCT_FMT)
+        _c(ws, row, 27, k.yoy_physical_occ_variance, PCT_FMT)
+        _c(ws, row, 28, k.yoy_eco_occ_variance,      PCT_FMT)
+        _c(ws, row, 29, k.yoy_leakage_gap_change,    PCT_FMT)
+        _c(ws, row, 30, k.income_per_unit,  CURRENCY_FMT)
+        _c(ws, row, 31, k.expense_per_unit, CURRENCY_FMT)
+        _c(ws, row, 32, k.noi_per_unit,     CURRENCY_FMT)
+        ws.cell(row, 33, k.source_key)
         # Re-apply variance fill to % column only — $ amount variance columns are intentionally unstyled.
         # Only highlight when variance exceeds ±5% threshold.
-        apply_variance_fill(ws.cell(row, 16), k.noi_variance_pct,
+        apply_variance_fill(ws.cell(row, 18), k.noi_variance_pct,
                             favorable_is_positive=True, threshold=0.05)
         row += 1
 
@@ -547,7 +550,7 @@ def _build_monthly_kpis(wb, kpis):
         )
         ws.add_table(tab)
 
-    ws.freeze_panes = "F2"
+    ws.freeze_panes = "H2"
     _autofit_columns(ws)
 
 
@@ -721,7 +724,8 @@ def _write_below_target_table(ws, kpis, start_row, eco_occ_target,
         ws.cell(start_row + 1, 1, "No data available.")
         return start_row + 2
 
-    latest_q_yr, latest_q = quarters[-1]
+    # With quarters sorted newest-first, index 0 is the most recent quarter
+    latest_q_yr, latest_q = quarters[0]
     q_kpis = _kpis_for_quarter(kpis, latest_q_yr, latest_q)
 
     # Aggregate per property for this quarter
@@ -733,6 +737,8 @@ def _write_below_target_table(ws, kpis, start_row, eco_occ_target,
     for prop, pklist in prop_groups.items():
         agg = _aggregate(pklist)
         pm = pklist[0].pm_name
+        city = pklist[0].city
+        tenancy = pklist[0].tenancy_type
         eco_occ = agg.get("eco_occ_pct")
         if eco_occ is None:
             continue
@@ -740,23 +746,23 @@ def _write_below_target_table(ws, kpis, start_row, eco_occ_target,
         effective_target = (bud if (use_budget_eco_occ and bud is not None)
                             else eco_occ_target)
         if eco_occ < effective_target:
-            below.append((eco_occ, prop, pm, agg, effective_target))
+            below.append((eco_occ, prop, pm, city, tenancy, agg, effective_target))
 
     below.sort(key=lambda x: x[0])  # worst first
 
     if use_budget_eco_occ:
-        headers = ["Property", "PM", "Eco Occ %", "Budget Eco Occ %",
-                   "Variance to Budget", "Driver 1", "Driver 2"]
+        headers = ["Property", "PM", "City", "Tenancy Type", "Eco Occ %",
+                   "Budget Eco Occ %", "Variance to Budget", "Driver 1", "Driver 2"]
     else:
-        headers = ["Property", "PM", "Eco Occ %", "Target", "Variance to Target",
-                   "Driver 1", "Driver 2"]
+        headers = ["Property", "PM", "City", "Tenancy Type", "Eco Occ %",
+                   "Target", "Variance to Target", "Driver 1", "Driver 2"]
     for col, h in enumerate(headers, 1):
         ws.cell(start_row, col, h)
     style_header_row(ws, start_row, len(headers), fill=_DARK_HDR_FILL, font=_DARK_HDR_FONT)
     ws.row_dimensions[start_row].height = 26
     row = start_row + 1
 
-    for rank, (eco_occ, prop, pm, agg, effective_target) in enumerate(below):
+    for rank, (eco_occ, prop, pm, city, tenancy, agg, effective_target) in enumerate(below):
         # Alternating ice-blue rows
         row_fill = _ICE_BLUE_FILL if rank % 2 == 0 else _WHITE_FILL
         for ci in range(1, len(headers) + 1):
@@ -764,11 +770,13 @@ def _write_below_target_table(ws, kpis, start_row, eco_occ_target,
         d1, d2 = _eco_occ_drivers(agg)
         ws.cell(row, 1, prop)
         ws.cell(row, 2, pm)
-        _c(ws, row, 3, eco_occ, PCT_FMT)
-        _c(ws, row, 4, effective_target, PCT_FMT)
-        _c(ws, row, 5, eco_occ - effective_target, PCT_FMT)
-        ws.cell(row, 6, d1)
-        ws.cell(row, 7, d2)
+        ws.cell(row, 3, city)
+        ws.cell(row, 4, tenancy)
+        _c(ws, row, 5, eco_occ, PCT_FMT)
+        _c(ws, row, 6, effective_target, PCT_FMT)
+        _c(ws, row, 7, eco_occ - effective_target, PCT_FMT)
+        ws.cell(row, 8, d1)
+        ws.cell(row, 9, d2)
         row += 1
 
     if row == start_row + 1:

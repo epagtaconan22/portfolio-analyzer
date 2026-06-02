@@ -314,6 +314,36 @@ ACCOUNT_MAPPING_RULES = [
     ("returned check",    "Other Income", "Income", True, False),
 ]
 
+# Property metadata — city, state, and tenancy type sourced from REO Schedule (12/31/2025).
+# Keyed by the canonical property name used throughout the app.
+# NOTE: "Ventaliso" in this app corresponds to "Ventaliso II" in the REO schedule.
+PROPERTY_METADATA: dict[str, dict[str, str]] = {
+    "Allanza":            {"city": "Indio",        "state": "CA", "tenancy_type": "Family"},
+    "Alora":              {"city": "San Marcos",    "state": "CA", "tenancy_type": "Family"},
+    "Arbor Green":        {"city": "Carson",        "state": "CA", "tenancy_type": "Family"},
+    "Aurora":             {"city": "Oakland",       "state": "CA", "tenancy_type": "Special Needs"},
+    "Connections":        {"city": "San Diego",     "state": "CA", "tenancy_type": "Special Needs"},
+    "Dahlia":             {"city": "Los Angeles",   "state": "CA", "tenancy_type": "Special Needs"},
+    "Della Rosa":         {"city": "Westminster",   "state": "CA", "tenancy_type": "Special Needs/Family"},
+    "Emerson":            {"city": "Los Angeles",   "state": "CA", "tenancy_type": "Special Needs"},
+    "Estrella":           {"city": "San Marcos",    "state": "CA", "tenancy_type": "Family"},
+    "Luna":               {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
+    "Monte Vista I":      {"city": "Murrieta",      "state": "CA", "tenancy_type": "Family"},
+    "Monte Vista II":     {"city": "Murrieta",      "state": "CA", "tenancy_type": "Family"},
+    "Nova":               {"city": "Oakland",       "state": "CA", "tenancy_type": "Special Needs"},
+    "Orange Gardens":     {"city": "Poway",         "state": "CA", "tenancy_type": "Family"},
+    "Sage Pointe":        {"city": "San Marcos",    "state": "CA", "tenancy_type": "Family"},
+    "Solterra":           {"city": "El Cajon",      "state": "CA", "tenancy_type": "Senior"},
+    "Sonoma Court":       {"city": "Escondido",     "state": "CA", "tenancy_type": "Family"},
+    "1050B I":            {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
+    "1050B II":           {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
+    "Vermont Villas":     {"city": "Los Angeles",   "state": "CA", "tenancy_type": "Special Needs"},
+    "Ventaliso":          {"city": "San Marcos",    "state": "CA", "tenancy_type": "Family"},
+    "Vitalia":            {"city": "San Jose",      "state": "CA", "tenancy_type": "Special Needs/Family"},
+    "Villas on the Park": {"city": "San Jose",      "state": "CA", "tenancy_type": "Special Needs"},
+    "The Link":           {"city": "San Diego",     "state": "CA", "tenancy_type": "Special Needs/Family"},
+}
+
 # JSCO/VOTP account code rules — MR-prefix codes used by John Stewart Company.
 # These are checked BEFORE keyword rules in account_mapper.map_account_name() when
 # the account code is non-empty. Keys are uppercase MR-prefix codes (exact match).

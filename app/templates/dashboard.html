@@ -108,6 +108,8 @@
       <tr>
         <th>Property</th>
         <th>PM</th>
+        <th>City</th>
+        <th>Tenancy Type</th>
         <th title="Total Units from Physical Occupancy Report">Total Units</th>
         <th title="Actual Income">Income</th>
         <th title="Actual Income / Total Units">Income/Unit</th>
@@ -127,6 +129,8 @@
       <tr>
         <td>{{ r.property_name }}</td>
         <td>{{ r.pm_name }}</td>
+        <td>{{ r.city }}</td>
+        <td>{{ r.tenancy_type }}</td>
         <td>{{ r.total_units }}</td>
         <td class="currency">{{ r.actual_income | currency }}</td>
         <td class="currency">{{ r.income_per_unit | currency }}</td>

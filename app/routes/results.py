@@ -374,6 +374,8 @@ def show(run_id):
             agg = _agg_kpis(prop_kpis)
             agg["property_name"] = prop
             agg["pm_name"] = prop_kpis[0].get("pm_name", "")
+            agg["city"] = prop_kpis[0].get("city", "")
+            agg["tenancy_type"] = prop_kpis[0].get("tenancy_type", "")
             agg["top_noi_driver_1"] = prop_kpis[0].get("top_noi_driver_1", "")
             agg["top_noi_driver_2"] = prop_kpis[0].get("top_noi_driver_2", "")
             # Determine whether this property is below its eco occ target

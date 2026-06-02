@@ -104,6 +104,9 @@ class PropertyPeriodKPIs:
     source_key: str = ""
     is_below_eco_occ_target: bool = False
     is_carveout: bool = False
+    # Property metadata (sourced from PROPERTY_METADATA in config.py)
+    city: str = ""
+    tenancy_type: str = ""
 
 @dataclass
 class SourceIndexEntry:

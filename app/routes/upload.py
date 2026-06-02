@@ -16,7 +16,7 @@ from app.exporter.backup_workbook import build_backup_workbook
 from app.exporter.validator import validate_both_workbooks
 from app.storage.runs import new_run_id, save_run
 from app.models import QualityCheck
-from config import ECO_OCC_TARGET, QUARTERS, PROPERTY_NAME_MAP, MONTHS, PERMANENT_EXCLUSIONS
+from config import ECO_OCC_TARGET, QUARTERS, PROPERTY_NAME_MAP, MONTHS, PERMANENT_EXCLUSIONS, PROPERTY_METADATA
 
 bp = Blueprint("upload", __name__)
 ALLOWED_EXT = {".xlsx", ".xls"}
@@ -138,6 +138,12 @@ def run_analysis():
     for k in kpis:
         if k.property_name.lower() in carveouts:
             k.is_carveout = True
+
+    # Enrich KPIs with property metadata (city, tenancy type) from config
+    for k in kpis:
+        meta = PROPERTY_METADATA.get(k.property_name, {})
+        k.city = meta.get("city", "")
+        k.tenancy_type = meta.get("tenancy_type", "")
 
     for k in kpis:
         if k.eco_occ_pct is not None:
