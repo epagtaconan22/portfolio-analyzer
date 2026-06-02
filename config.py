@@ -316,8 +316,18 @@ ACCOUNT_MAPPING_RULES = [
 
 # Property metadata — city, state, and tenancy type sourced from REO Schedule (12/31/2025).
 # Keyed by the canonical property name used throughout the app.
+# All 63 active portfolio properties are listed.
+#
+# PARSER MATCHING NOTE: The lookup key must exactly match the property name the parser
+# infers from the uploaded workbook sheet name (after PROPERTY_NAME_MAP normalization).
+# If a new workbook produces a different name (e.g. "Aria Senior Apartments" instead of
+# "Aria"), add the workbook-inferred name to PROPERTY_NAME_MAP pointing to the canonical
+# key below. Properties with no PROPERTY_NAME_MAP entry are matched by their raw parsed
+# name, which works when the sheet name already matches the canonical name here.
+#
 # NOTE: "Ventaliso" in this app corresponds to "Ventaliso II" in the REO schedule.
 PROPERTY_METADATA: dict[str, dict[str, str]] = {
+    # ── Currently managed (financial workbooks uploaded regularly) ────────────
     "Allanza":            {"city": "Indio",        "state": "CA", "tenancy_type": "Family"},
     "Alora":              {"city": "San Marcos",    "state": "CA", "tenancy_type": "Family"},
     "Arbor Green":        {"city": "Carson",        "state": "CA", "tenancy_type": "Family"},
@@ -342,6 +352,46 @@ PROPERTY_METADATA: dict[str, dict[str, str]] = {
     "Vitalia":            {"city": "San Jose",      "state": "CA", "tenancy_type": "Special Needs/Family"},
     "Villas on the Park": {"city": "San Jose",      "state": "CA", "tenancy_type": "Special Needs"},
     "The Link":           {"city": "San Diego",     "state": "CA", "tenancy_type": "Special Needs/Family"},
+    # ── Full portfolio — remaining REO properties ─────────────────────────────
+    "Aria":               {"city": "Los Angeles",   "state": "CA", "tenancy_type": "Special Needs"},
+    "Asante":             {"city": "Los Angeles",   "state": "CA", "tenancy_type": "Senior"},
+    "Auburn Park II":     {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
+    "Avian Glen":         {"city": "Vallejo",       "state": "CA", "tenancy_type": "Family"},
+    "Bella Vita":         {"city": "Carson",        "state": "CA", "tenancy_type": "Senior"},
+    "Bluewater":          {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
+    "Cassia Heights":     {"city": "Carlsbad",      "state": "CA", "tenancy_type": "Family"},
+    "Cielo Carmel I":     {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
+    "Cielo Carmel II":    {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
+    "City Scene":         {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
+    "Creekside Trails":   {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
+    "Cypress":            {"city": "San Diego",     "state": "CA", "tenancy_type": "Special Needs"},
+    "Eastgate":           {"city": "San Marcos",    "state": "CA", "tenancy_type": "Family/Veteran"},
+    "Fairways II":        {"city": "San Jose",      "state": "CA", "tenancy_type": "Family"},
+    "Hollywood Palms II": {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
+    "Kristine II":        {"city": "Bakersfield",   "state": "CA", "tenancy_type": "Mixed"},
+    "Lotus Garden":       {"city": "Los Angeles",   "state": "CA", "tenancy_type": "Family"},
+    "Lumina":             {"city": "Chatsworth",    "state": "CA", "tenancy_type": "Special Needs"},
+    "Magnolia Court":     {"city": "Manteca",       "state": "CA", "tenancy_type": "Senior"},
+    "Maple Square":       {"city": "Fremont",       "state": "CA", "tenancy_type": "Family"},
+    "Mirador":            {"city": "Los Angeles",   "state": "CA", "tenancy_type": "Senior"},
+    "Mission Village II": {"city": "Temecula",      "state": "CA", "tenancy_type": "Family"},
+    "Orchard at Hilltop": {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
+    "Paseo Pointe":       {"city": "Vista",         "state": "CA", "tenancy_type": "Family"},
+    "PATH Metro Villas":  {"city": "Los Angeles",   "state": "CA", "tenancy_type": "Special Needs"},
+    "Riverwalk":          {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
+    "Shoreline":          {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
+    "Skyline":            {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
+    "Stella":             {"city": "San Diego",     "state": "CA", "tenancy_type": "Special Needs"},
+    "Studio 15 II":       {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
+    "Symphony at Del Sur":{"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
+    "The Helm":           {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
+    "The Iris":           {"city": "Los Angeles",   "state": "CA", "tenancy_type": "Special Needs/Family"},
+    "The Remi":           {"city": "Los Angeles",   "state": "CA", "tenancy_type": "Special Needs/Senior"},
+    "Tizon":              {"city": "San Diego",     "state": "CA", "tenancy_type": "Senior"},
+    "Vela":               {"city": "San Jose",      "state": "CA", "tenancy_type": "Special Needs/Family"},
+    "Westhaven":          {"city": "Los Angeles",   "state": "CA", "tenancy_type": "Special Needs"},
+    "Windsor Pointe":     {"city": "Carlsbad",      "state": "CA", "tenancy_type": "Special Needs/Veteran"},
+    "Zephyr":             {"city": "San Diego",     "state": "CA", "tenancy_type": "Special Needs"},
 }
 
 # JSCO/VOTP account code rules — MR-prefix codes used by John Stewart Company.
