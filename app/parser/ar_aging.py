@@ -38,6 +38,7 @@ from typing import Optional
 import openpyxl
 
 from app.models import ARAgingRow
+from app.parser.utils import load_workbook_any_format
 
 _TYPE_NORMALIZE: dict[str, str] = {
     "tenant rent":        "Tenant Rent",
@@ -60,7 +61,7 @@ def _parse_one(path: str) -> list[ARAgingRow]:
     stem  = os.path.splitext(fname)[0]
     pm_name, receivable_type, year, month = _parse_filename(stem)
 
-    wb  = openpyxl.load_workbook(path, data_only=True)
+    wb  = load_workbook_any_format(path)
     fmt = _detect_format(wb)
 
     if fmt == "conam_2026":

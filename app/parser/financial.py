@@ -8,6 +8,7 @@ from collections import Counter
 from typing import Optional
 import openpyxl
 from app.models import RawRow, SourceIndexEntry
+from app.parser.utils import load_workbook_any_format
 from app.parser.sheet_inferrer import (
     infer_sheet_type,
     _ACTUAL_BUDGET_PATTERNS,
@@ -78,7 +79,7 @@ def parse_financial_workbooks(
     for path in file_paths:
         fname = os.path.basename(path)
         pm_name = pm_name_map.get(fname, _infer_pm_from_filename(fname))
-        wb = openpyxl.load_workbook(path, data_only=True)
+        wb = load_workbook_any_format(path)
 
         for sheet_name in wb.sheetnames:
             ws = wb[sheet_name]

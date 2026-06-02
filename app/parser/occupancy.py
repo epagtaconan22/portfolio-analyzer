@@ -14,6 +14,7 @@ import re
 from typing import Optional
 import openpyxl
 from app.models import OccupancyRow
+from app.parser.utils import load_workbook_any_format
 
 # ── Narrow-format column keywords ─────────────────────────────────────────────
 _PROPERTY_KEYWORDS = ["property", "prop", "name", "asset"]
@@ -66,7 +67,7 @@ _SKIP_NAME_PATTERNS: frozenset[str] = frozenset({
 
 
 def parse_occupancy_report(file_path: str) -> list[OccupancyRow]:
-    wb = openpyxl.load_workbook(file_path, data_only=True)
+    wb = load_workbook_any_format(file_path)
     rows: list[OccupancyRow] = []
 
     for ws in wb.worksheets:
