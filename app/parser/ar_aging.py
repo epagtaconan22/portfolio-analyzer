@@ -119,8 +119,11 @@ def _parse_conam_2026(wb, fname, pm_name, year, month) -> list[ARAgingRow]:
         # Property header row: no numeric data in cols C–J (indices 2–8)
         is_property_header = (row[2] is None and row[3] is None and row[4] is None)
         if is_property_header:
+            # Do NOT invert "Link, The" → "The Link" here: the financial parser
+            # keeps the comma form too, so both stay consistent and join correctly.
+            # PROPERTY_NAME_MAP handles any further normalisation.
             name = re.sub(r'\s*\([^)]+\)\s*$', '', cell).strip()
-            current_prop = _fix_inverted_name(name)
+            current_prop = name
             continue
 
         if current_prop is None:

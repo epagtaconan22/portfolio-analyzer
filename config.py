@@ -352,6 +352,10 @@ PROPERTY_METADATA: dict[str, dict[str, str]] = {
     "Vitalia":            {"city": "San Jose",      "state": "CA", "tenancy_type": "Special Needs/Family"},
     "Villas on the Park": {"city": "San Jose",      "state": "CA", "tenancy_type": "Special Needs"},
     "The Link":           {"city": "San Diego",     "state": "CA", "tenancy_type": "Special Needs/Family"},
+    # ── ConAm comma-form aliases (financial parser produces "X, The" not "The X") ─
+    "Link, The":              {"city": "San Diego",   "state": "CA", "tenancy_type": "Special Needs/Family"},
+    "Remi Apartments, The":   {"city": "Los Angeles", "state": "CA", "tenancy_type": "Special Needs/Senior"},
+    "Orchard at Hilltop, The":{"city": "San Diego",   "state": "CA", "tenancy_type": "Family"},
     # ── Full portfolio — remaining REO properties ─────────────────────────────
     "Aria":               {"city": "Los Angeles",   "state": "CA", "tenancy_type": "Special Needs"},
     "Asante":             {"city": "Los Angeles",   "state": "CA", "tenancy_type": "Senior"},
@@ -537,20 +541,22 @@ PROPERTY_NAME_MAP: dict[str, str] = {
     "Ventaliso Apartments":            "Ventaliso",
     "Vitalia (Bascom) Apts.":          "Vitalia",
     # ── ConAm AR Aging 2026+ format ──────────────────────────────────────────
-    # Names inferred after stripping "(code)" suffix and fixing "X, The" inversion.
+    # Names after stripping "(code)" suffix.  _fix_inverted_name is NOT applied
+    # in this parser so names stay in "X, The" comma form — matching the financial
+    # parser output and the canonical names used throughout the app.
     "Riverwalk Apartments":       "Riverwalk",
     "Westhaven Apartments":       "Westhaven",
     "Hollywood Palms":            "Hollywood Palms II",
     "Auburn Park":                "Auburn Park II",
     "Studio 15":                  "Studio 15 II",
-    "The Remi Apartments":        "The Remi",
-    "The Orchard at Hilltop":     "Orchard at Hilltop",   # "Orchard at Hilltop, The" → inverted
     # ── ConAm AR Aging 2025 format ───────────────────────────────────────────
     # Names come directly from sheet tab names (trailing whitespace stripped by parser).
+    # Mapped to the same comma-form canonical names used by the financial parser.
     "Auburn":                     "Auburn Park II",
     "Creekside Trail":            "Creekside Trails",
-    "Link":                       "The Link",
-    "Remi":                       "The Remi",
+    "Link":                       "Link, The",
+    "Remi":                       "Remi Apartments, The",
+    "Orchard at Hilltop":         "Orchard at Hilltop, The",
     # ── Yardi 26-char truncated names (stored literally in occupancy cells) ───
     # Yardi truncates property names longer than 23 characters and appends "..."
     # so the cell contains exactly [first 23 chars + "..."] = 26 chars total.

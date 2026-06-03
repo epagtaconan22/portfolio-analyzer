@@ -224,8 +224,9 @@ def test_conam_2026_both_types_extracted(conam_2026_wb):
 def test_conam_2026_property_names(conam_2026_wb):
     rows = parse_ar_aging_reports([conam_2026_wb])
     props = {r.property_name for r in rows}
-    # "Link, The (f66)" → stripped code → fixed inversion → "The Link"
-    assert "The Link" in props
+    # "Link, The (f66)" → code stripped → stays "Link, The" (no inversion applied;
+    # must match the financial parser which also produces "Link, The")
+    assert "Link, The" in props
     assert "Cypress" in props
     assert not any("(" in p for p in props)
 
@@ -242,7 +243,7 @@ def test_conam_2026_pm_name(conam_2026_wb):
 
 def test_conam_2026_rent_and_rentpm_summed(conam_2026_wb):
     rows = parse_ar_aging_reports([conam_2026_wb])
-    link_rent = next(r for r in rows if r.property_name == "The Link"
+    link_rent = next(r for r in rows if r.property_name == "Link, The"
                      and r.receivable_type == "Tenant Rent")
     # RENT(50000) + RENTPM(500) = 50500
     assert link_rent.charge_amount == pytest.approx(50500)
@@ -251,7 +252,7 @@ def test_conam_2026_rent_and_rentpm_summed(conam_2026_wb):
 
 def test_conam_2026_subsidy_amounts(conam_2026_wb):
     rows = parse_ar_aging_reports([conam_2026_wb])
-    link_sub = next(r for r in rows if r.property_name == "The Link"
+    link_sub = next(r for r in rows if r.property_name == "Link, The"
                     and r.receivable_type == "Subsidy")
     assert link_sub.charge_amount == pytest.approx(20000)
     assert link_sub.owed_0_30     == pytest.approx(5000)
