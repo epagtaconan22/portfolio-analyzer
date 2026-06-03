@@ -66,6 +66,8 @@ _JSCO_SHEET_NAMES = {"jsc_actual12", "leo_forecast"}
 _JSCO_METADATA_FRAGMENTS = (
     "database", "entity", "page:", "date:", "time:", "accrual",
     "john stewart", "johnstewart", "12 month", "company",
+    # Report-title text that appears in col D/E of LEO_FORECAST title rows
+    "forecast", "budget report", "actual amounts",
 )
 
 

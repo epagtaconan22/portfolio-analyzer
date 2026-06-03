@@ -540,6 +540,10 @@ PROPERTY_NAME_MAP: dict[str, str] = {
     "Ten Fifty B Street Hsg Ptrs":     "1050B II",
     "Ventaliso Apartments":            "Ventaliso",
     "Vitalia (Bascom) Apts.":          "Vitalia",
+    # ── ConAm Occupancy Trend Report (2024/2025 format) ──────────────────────
+    # Property names after stripping " -Yardi" / " - Yardi" suffix.
+    "Cypress Apartments":         "Cypress",
+    "Link Apartments, The":       "Link, The",
     # ── ConAm AR Aging 2026+ format ──────────────────────────────────────────
     # Names after stripping "(code)" suffix.  _fix_inverted_name is NOT applied
     # in this parser so names stay in "X, The" comma form — matching the financial

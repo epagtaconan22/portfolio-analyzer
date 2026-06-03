@@ -1,15 +1,22 @@
 """Parses physical occupancy Excel reports into OccupancyRow records.
 
-Supports two layouts:
+Supports three layouts:
 
   Narrow (original):  one row per property-month.
     Columns: Property | Year | Month | Occupied Units | Total Units
 
-  Wide (Yardi):  one row per property, months as columns (values are percentages 0-100).
+  Wide/Yardi:  one row per property, months as columns (values are percentages 0-100).
     Example header:  Name | Units | Sq Ft | Jan | Feb | ... | Dec
     Title rows contain the report year ("Month Year = 01/2025").
+
+  ConAm Trend ("Occupancy Trend Report"):  one row per property, one column per
+    month (values are percentages 0-100), with month headers as datetime objects.
+    Row 1 contains "Occupancy Trend Report".
+    Row 8 contains the date headers; col A = property name (with " -Yardi" suffix);
+    col D = total units.  Year is encoded in each datetime header.
 """
 
+import datetime as _dt
 import re
 from typing import Optional
 import openpyxl
@@ -73,7 +80,14 @@ def parse_occupancy_report(file_path: str) -> list[OccupancyRow]:
     for ws in wb.worksheets:
         all_cells = list(ws.iter_rows(values_only=True))
 
-        # Try wide format first (Yardi: months as columns, values are percentages)
+        # ConAm "Occupancy Trend Report" — wide with datetime column headers
+        if _is_conam_trend_format(all_cells):
+            trend_rows = _parse_conam_trend_format(all_cells)
+            if trend_rows:
+                rows.extend(trend_rows)
+            continue
+
+        # Yardi wide format (months as text abbreviation headers, values are percentages)
         wide_rows = _parse_wide_format(all_cells)
         if wide_rows:
             rows.extend(wide_rows)
@@ -102,6 +116,108 @@ def parse_occupancy_report(file_path: str) -> list[OccupancyRow]:
             ))
 
     wb.close()
+    return rows
+
+
+# ── ConAm Occupancy Trend Report parser ──────────────────────────────────────
+
+def _is_conam_trend_format(all_cells: list) -> bool:
+    """Return True if this sheet is a ConAm Occupancy Trend Report."""
+    if not all_cells:
+        return False
+    return str(all_cells[0][0] or "").strip() == "Occupancy Trend Report"
+
+
+def _parse_conam_trend_format(all_cells: list) -> list[OccupancyRow]:
+    """Parse the ConAm Occupancy Trend Report (wide, percentage, datetime headers).
+
+    Layout:
+      Row 1:  "Occupancy Trend Report"
+      Row 8:  datetime headers at varying column indices (end-of-month dates)
+      Row 10: "Group <none>" section separator — skipped
+      Row 11+: property data rows
+        Col A (0): property name, e.g. "Auburn Park - Yardi"
+        Col D (3): total units (integer)
+        Month cols: percentage 0-100 (occupied unit percentage)
+    """
+    # Find the date-header row: first row within the first 15 that has >= 6 datetime values
+    date_row_idx: Optional[int] = None
+    date_row: Optional[tuple] = None
+    for idx, row in enumerate(all_cells[:15]):
+        dt_count = sum(1 for c in row if isinstance(c, (_dt.date, _dt.datetime)))
+        if dt_count >= 6:
+            date_row_idx = idx
+            date_row = row
+            break
+
+    if date_row_idx is None or date_row is None:
+        return []
+
+    # Build {col_index: (year, month)} from the datetime header row
+    col_to_ym: dict[int, tuple[int, int]] = {}
+    for col_idx, cell in enumerate(date_row):
+        if isinstance(cell, (_dt.date, _dt.datetime)):
+            col_to_ym[col_idx] = (cell.year, cell.month)
+
+    if not col_to_ym:
+        return []
+
+    # Total-units column — always col D (index 3) in this format
+    total_units_col = 3
+
+    rows: list[OccupancyRow] = []
+    for row in all_cells[date_row_idx + 1:]:
+        if not row or row[0] is None:
+            continue
+
+        name_raw = str(row[0]).strip()
+        if not name_raw:
+            continue
+
+        # Skip section-header rows ("Group <none>", "Report Version:", etc.)
+        if name_raw.lower().startswith(("group ", "report version")):
+            continue
+
+        # Strip " - Yardi", " -Yardi", " -yardi" suffixes (case-insensitive)
+        name = re.sub(r'\s*-\s*Yardi\s*$', '', name_raw, flags=re.IGNORECASE).strip()
+        if not name:
+            continue
+
+        # Total units
+        total_cell = row[total_units_col] if total_units_col < len(row) else None
+        try:
+            total_units = int(round(float(str(total_cell).replace(',', '').rstrip('%'))))
+        except (TypeError, ValueError):
+            continue
+        if total_units <= 0:
+            continue
+
+        # One OccupancyRow per month column
+        for col_idx, (yr, mo) in col_to_ym.items():
+            if col_idx >= len(row):
+                continue
+            pct_cell = row[col_idx]
+            if pct_cell is None:
+                continue
+            pct_str = str(pct_cell).strip().rstrip('%').replace(',', '')
+            if pct_str.lower() in _SKIP_PCT_VALUES:
+                continue
+            try:
+                pct = float(pct_str)
+            except (ValueError, AttributeError):
+                continue
+            if pct > 110:
+                continue
+            pct = max(0.0, pct)
+            occupied_units = round(pct / 100 * total_units)
+            rows.append(OccupancyRow(
+                property_name=name,
+                year=yr,
+                month=mo,
+                occupied_units=occupied_units,
+                total_units=total_units,
+            ))
+
     return rows
 
 
