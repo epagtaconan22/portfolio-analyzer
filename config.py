@@ -333,8 +333,6 @@ ACCOUNT_MAPPING_RULES = [
 # "Aria"), add the workbook-inferred name to PROPERTY_NAME_MAP pointing to the canonical
 # key below. Properties with no PROPERTY_NAME_MAP entry are matched by their raw parsed
 # name, which works when the sheet name already matches the canonical name here.
-#
-# NOTE: "Ventaliso" in this app corresponds to "Ventaliso II" in the REO schedule.
 PROPERTY_METADATA: dict[str, dict[str, str]] = {
     # ── Currently managed (financial workbooks uploaded regularly) ────────────
     "Allanza":            {"city": "Indio",        "state": "CA", "tenancy_type": "Family"},
@@ -357,11 +355,15 @@ PROPERTY_METADATA: dict[str, dict[str, str]] = {
     "1050B I":            {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
     "1050B II":           {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
     "Vermont Villas":     {"city": "Los Angeles",   "state": "CA", "tenancy_type": "Special Needs"},
-    "Ventaliso":          {"city": "San Marcos",    "state": "CA", "tenancy_type": "Family"},
+    "Ventaliso II":       {"city": "San Marcos",    "state": "CA", "tenancy_type": "Family"},
+    "Ventaliso":          {"city": "San Marcos",    "state": "CA", "tenancy_type": "Family"},  # legacy alias
     "Vitalia":            {"city": "San Jose",      "state": "CA", "tenancy_type": "Special Needs/Family"},
     "Villas on the Park": {"city": "San Jose",      "state": "CA", "tenancy_type": "Special Needs"},
     "The Link":           {"city": "San Diego",     "state": "CA", "tenancy_type": "Special Needs/Family"},
-    # ── ConAm comma-form aliases (financial parser produces "X, The" not "The X") ─
+    # ── Creekside (canonical) — Creekside Trails was the prior name ─────────────
+    "Creekside":          {"city": "San Diego",     "state": "CA", "tenancy_type": "Family"},
+    # ── Legacy aliases kept for backward compatibility with stored runs ──────────
+    # New runs normalise through PROPERTY_NAME_MAP before the metadata lookup.
     "Link, The":              {"city": "San Diego",   "state": "CA", "tenancy_type": "Special Needs/Family"},
     "Remi Apartments, The":   {"city": "Los Angeles", "state": "CA", "tenancy_type": "Special Needs/Senior"},
     "Orchard at Hilltop, The":{"city": "San Diego",   "state": "CA", "tenancy_type": "Family"},
@@ -547,16 +549,24 @@ PROPERTY_NAME_MAP: dict[str, str] = {
     "Sonoma Court Apartments":         "Sonoma Court",
     "Ten Fifty B Street":               "1050B I",
     "Ten Fifty B Street Hsg Ptrs":     "1050B II",
-    "Ventaliso Apartments":            "Ventaliso",
+    "Ventaliso Apartments":            "Ventaliso II",
     "Vitalia (Bascom) Apts.":          "Vitalia",
+    # ── Canonical name normalisations (parser infers longer / inverted form) ──
+    # These map the raw financial-workbook-inferred name to the authoritative short name.
+    "Eastgate at Creekside":           "Eastgate",
+    "Kristine Apartments (II)":        "Kristine II",
+    "Link, The":                       "The Link",
+    "Orchard at Hilltop, The":         "Orchard at Hilltop",
+    "Remi Apartments, The":            "The Remi",
+    "Vela (Alum Rock)":                "Vela",
+    "Creekside Trails":                "Creekside",
     # ── ConAm Occupancy Trend Report (2024/2025 format) ──────────────────────
     # Property names after stripping " -Yardi" / " - Yardi" suffix.
     "Cypress Apartments":         "Cypress",
-    "Link Apartments, The":       "Link, The",
+    "Link Apartments, The":       "The Link",
     # ── ConAm AR Aging 2026+ format ──────────────────────────────────────────
     # Names after stripping "(code)" suffix.  _fix_inverted_name is NOT applied
-    # in this parser so names stay in "X, The" comma form — matching the financial
-    # parser output and the canonical names used throughout the app.
+    # in this parser so names stay in raw form; PROPERTY_NAME_MAP handles the rest.
     "Riverwalk Apartments":       "Riverwalk",
     "Westhaven Apartments":       "Westhaven",
     "Hollywood Palms":            "Hollywood Palms II",
@@ -564,12 +574,10 @@ PROPERTY_NAME_MAP: dict[str, str] = {
     "Studio 15":                  "Studio 15 II",
     # ── ConAm AR Aging 2025 format ───────────────────────────────────────────
     # Names come directly from sheet tab names (trailing whitespace stripped by parser).
-    # Mapped to the same comma-form canonical names used by the financial parser.
     "Auburn":                     "Auburn Park II",
-    "Creekside Trail":            "Creekside Trails",
-    "Link":                       "Link, The",
-    "Remi":                       "Remi Apartments, The",
-    "Orchard at Hilltop":         "Orchard at Hilltop, The",
+    "Creekside Trail":            "Creekside",
+    "Link":                       "The Link",
+    "Remi":                       "The Remi",
     # ── Yardi 26-char truncated names (stored literally in occupancy cells) ───
     # Yardi truncates property names longer than 23 characters and appends "..."
     # so the cell contains exactly [first 23 chars + "..."] = 26 chars total.

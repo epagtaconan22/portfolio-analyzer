@@ -181,9 +181,9 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
     for yr in years_sorted:
         yr_kpis = [k for k in kpis if k.year == yr and not k.is_carveout]
         year_aggs[yr] = _aggregate(yr_kpis)
-    # One year pair per consecutive year: [(2023, 2024), (2024, 2025), ...]
-    year_pairs = [(years_sorted[i], years_sorted[i + 1])
-                  for i in range(len(years_sorted) - 1)]
+    # One year pair per consecutive year, newest first: [(2025, 2026), (2024, 2025), ...]
+    year_pairs = list(reversed([(years_sorted[i], years_sorted[i + 1])
+                                for i in range(len(years_sorted) - 1)]))
 
     # ── Title ────────────────────────────────────────────────────────────────
     row = 1
@@ -967,7 +967,7 @@ def _write_dashboard_ar_summary(ws, ar_rows: list, start_row: int,
             return {
                 "current_owed": sum(r.current_owed for r in rows),
                 "prepayments":  sum(r.prepayments for r in rows),
-                "pct_overdue":  (over_60 / charge) if charge > 0 else None,
+                "pct_overdue":  (over_60 / charge) if charge > 0 else 0.0,
             }
 
         period_aggs_ar = {(yr, mo): _agg(yr, mo) for (yr, mo) in periods}
@@ -1209,7 +1209,7 @@ def _build_ar_aging(wb, ar_rows: list, portfolio_name: str) -> None:
             return {
                 "current_owed": sum(r.current_owed for r in rows),
                 "prepayments":  sum(r.prepayments for r in rows),
-                "pct_overdue":  (over_60 / charge) if charge > 0 else None,
+                "pct_overdue":  (over_60 / charge) if charge > 0 else 0.0,
                 "pm_name":      rows[0].pm_name,
             }
 

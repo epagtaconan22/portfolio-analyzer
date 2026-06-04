@@ -122,7 +122,8 @@ def _agg_ar(ar_rows: list[dict], receivable_type: str, year: int, month: int) ->
     return {
         "current_owed":   sum(r["current_owed"] for r in rows),
         "prepayments":    sum(r["prepayments"] for r in rows),
-        "pct_overdue":    total_over_60 / charge_amount if charge_amount > 0 else None,
+        # Show 0.0% (not "—") when rows exist but the charge balance is zero
+        "pct_overdue":    (total_over_60 / charge_amount) if charge_amount > 0 else 0.0,
         "property_count": len({r["property_name"] for r in rows}),
     }
 
@@ -142,7 +143,7 @@ def _agg_ar_for_prop(ar_rows: list[dict], property_name: str,
     return {
         "current_owed": sum(r["current_owed"] for r in rows),
         "prepayments":  sum(r["prepayments"] for r in rows),
-        "pct_overdue":  over_60 / charge if charge > 0 else None,
+        "pct_overdue":  (over_60 / charge) if charge > 0 else 0.0,
     }
 
 
@@ -306,9 +307,9 @@ def show(run_id):
     for yr in years_sorted:
         yr_kpis = [k for k in kpis if k.get("year") == yr and not k.get("is_carveout")]
         year_aggs[yr] = _agg_kpis(yr_kpis)
-    # One pair per consecutive year: [(2023, 2024), (2024, 2025), ...]
-    year_pairs = [(years_sorted[i], years_sorted[i + 1])
-                  for i in range(len(years_sorted) - 1)]
+    # One pair per consecutive year, newest first: [(2025, 2026), (2024, 2025), ...]
+    year_pairs = list(reversed([(years_sorted[i], years_sorted[i + 1])
+                                for i in range(len(years_sorted) - 1)]))
 
     summary_kpi_rows = []
     for defn in _SUMMARY_KPI_DEFINITIONS:
