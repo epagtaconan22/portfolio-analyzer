@@ -68,19 +68,37 @@ KPI_FORMULAS = {
     "YoY Leakage Gap Change":
         "YoY Leakage Gap Change = Current Year Leakage Gap - Prior Year Leakage Gap. Positive = gap widened (worse).",
     "Income Per Unit":
-        "Income Per Unit = Actual Income / Total Units. Total Units sourced from Physical Occupancy Report.",
+        "Income Per Unit (monthly rate) = Actual Income / (Total Units x Months in Period). "
+        "Divides the cumulative period income by both unit count and number of months so that "
+        "a monthly, quarterly, and full-year row all show the same monthly run-rate benchmark. "
+        "Total Units sourced from Physical Occupancy Report.",
     "Expense Per Unit":
-        "Expense Per Unit = Actual Expenses / Total Units. Total Units sourced from Physical Occupancy Report.",
+        "Expense Per Unit (monthly rate) = Actual Expenses / (Total Units x Months in Period). "
+        "Divides the cumulative period expenses by both unit count and number of months so that "
+        "a monthly, quarterly, and full-year row all show the same monthly run-rate benchmark. "
+        "Total Units sourced from Physical Occupancy Report.",
     "NOI Per Unit":
-        "NOI Per Unit = Actual NOI / Total Units. Total Units sourced from Physical Occupancy Report.",
+        "NOI Per Unit (monthly rate) = Actual NOI / (Total Units x Months in Period). "
+        "Divides the cumulative period NOI by both unit count and number of months so that "
+        "a monthly, quarterly, and full-year row all show the same monthly run-rate benchmark. "
+        "Total Units sourced from Physical Occupancy Report.",
     "Amount Per Unit":
         "Amount Per Unit = Account Amount / Total Units. Enables micro-level benchmarking of individual income and expense lines.",
     "Income/Unit":
-        "Income Per Unit = Actual Income / Total Units. Total Units sourced from Physical Occupancy Report.",
+        "Income Per Unit (monthly rate) = Actual Income / (Total Units x Months in Period). "
+        "Divides the cumulative period income by both unit count and number of months so that "
+        "a monthly, quarterly, and full-year row all show the same monthly run-rate benchmark. "
+        "Total Units sourced from Physical Occupancy Report.",
     "Expense/Unit":
-        "Expense Per Unit = Actual Expenses / Total Units. Total Units sourced from Physical Occupancy Report.",
+        "Expense Per Unit (monthly rate) = Actual Expenses / (Total Units x Months in Period). "
+        "Divides the cumulative period expenses by both unit count and number of months so that "
+        "a monthly, quarterly, and full-year row all show the same monthly run-rate benchmark. "
+        "Total Units sourced from Physical Occupancy Report.",
     "NOI/Unit":
-        "NOI Per Unit = Actual NOI / Total Units. Total Units sourced from Physical Occupancy Report.",
+        "NOI Per Unit (monthly rate) = Actual NOI / (Total Units x Months in Period). "
+        "Divides the cumulative period NOI by both unit count and number of months so that "
+        "a monthly, quarterly, and full-year row all show the same monthly run-rate benchmark. "
+        "Total Units sourced from Physical Occupancy Report.",
 }
 
 # Account mapping rules: list of (keyword_pattern, category, treatment, in_noi, in_eco_occ)
