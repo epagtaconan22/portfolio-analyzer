@@ -16,7 +16,8 @@ from app.exporter.backup_workbook import build_backup_workbook
 from app.exporter.validator import validate_both_workbooks
 from app.storage.runs import new_run_id, save_run
 from app.models import QualityCheck
-from config import ECO_OCC_TARGET, QUARTERS, PROPERTY_NAME_MAP, MONTHS, PERMANENT_EXCLUSIONS, PROPERTY_METADATA
+from config import (ECO_OCC_TARGET, QUARTERS, PROPERTY_NAME_MAP, MONTHS,
+                    PERMANENT_EXCLUSIONS, PROPERTY_METADATA, PROPERTY_PM_EXCLUSIONS)
 
 bp = Blueprint("upload", __name__)
 ALLOWED_EXT = {".xlsx", ".xls"}
@@ -92,6 +93,16 @@ def run_analysis():
         _row.property_name = PROPERTY_NAME_MAP.get(_row.property_name, _row.property_name)
     for _entry in source_index:
         _entry.property_name = PROPERTY_NAME_MAP.get(_entry.property_name, _entry.property_name)
+
+    # Drop financial rows for properties with a designated authoritative PM.
+    # Prevents double-counting when a resyndication property appears in two
+    # PM companies' workbooks simultaneously.
+    if PROPERTY_PM_EXCLUSIONS:
+        raw_rows = [
+            r for r in raw_rows
+            if PROPERTY_PM_EXCLUSIONS.get(r.property_name.lower(), r.pm_name).lower()
+               == r.pm_name.lower()
+        ]
 
     occ_rows = []
     for occ_file in occ_files:

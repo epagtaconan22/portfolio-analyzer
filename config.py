@@ -14,6 +14,15 @@ PERMANENT_EXCLUSIONS: set[str] = {
     "west hollywood housing, lp",
 }
 
+# Per-property PM override — used when a property appears in multiple PM companies'
+# workbooks (e.g. during resyndication). Only data from the designated PM is kept;
+# all other PM sources for that property are silently dropped during ingestion.
+# Keys are lowercase canonical property names; values are the authoritative PM name
+# (must match the pm_name field as inferred by the financial parser, case-insensitive).
+PROPERTY_PM_EXCLUSIONS: dict[str, str] = {
+    "studio 15 ii": "ConAm",   # In resyndication; ConAm is the authoritative source
+}
+
 # KPI formula dictionary - drives hover tooltips (web) and Excel cell comments (workbooks)
 KPI_FORMULAS = {
     "Actual Income":
