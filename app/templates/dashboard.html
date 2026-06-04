@@ -64,8 +64,8 @@
         <th>{{ lbl }}<br><span class="period-prop-count">{{ period_property_counts.get(lbl, 0) }} Properties</span></th>
         {% endfor %}
         {% for (prev_yr, curr_yr) in year_pairs %}
-        <th class="yoy-col" title="Year-over-year change: annual {{ prev_yr }} vs {{ curr_yr }}">YoY Δ<br><span class="period-prop-count">{{ prev_yr }}→{{ curr_yr }}</span></th>
-        <th class="yoy-col" title="Year-over-year % change: annual {{ prev_yr }} vs {{ curr_yr }}">YoY % Chg<br><span class="period-prop-count">{{ prev_yr }}→{{ curr_yr }}</span></th>
+        <th class="yoy-col" title="Budget comparison: {{ curr_yr }} budgeted amount vs {{ prev_yr }} budgeted amount. Shows whether the budget itself became more or less ambitious year-over-year.">Bud Δ<br><span class="period-prop-count">{{ prev_yr }}→{{ curr_yr }}</span></th>
+        <th class="yoy-col" title="Budget comparison % change: {{ curr_yr }} budget vs {{ prev_yr }} budget.">Bud Δ %<br><span class="period-prop-count">{{ prev_yr }}→{{ curr_yr }}</span></th>
         {% endfor %}
       </tr>
     </thead>
@@ -275,6 +275,80 @@
   </div>
   {% endif %}
 
+</section>
+{% endif %}
+
+<!-- NOI vs Budget — Top Positive Variances -->
+{% if noi_vs_budget_top %}
+<section class="card">
+  <h2>Top Positive NOI Variances vs Budget — {{ noi_vs_budget_latest_label }}</h2>
+  <p class="hint" style="margin-bottom:10px">Properties furthest <strong>above</strong> budget NOI for the latest period. Income Var = Actual − Budget Income; Expense Var = Actual − Budget Expenses (negative = under budget, favorable).</p>
+  <div class="table-scroll">
+  <table class="data-table" data-sortfilter>
+    <thead><tr>
+      <th>Rank</th><th>Property</th><th>PM</th><th>City</th>
+      <th title="Actual NOI for the period">Actual NOI</th>
+      <th title="Budgeted NOI for the period">Budget NOI</th>
+      <th title="Actual NOI minus Budget NOI">NOI Var vs Budget</th>
+      <th title="NOI Variance / |Budget NOI|">NOI Var %</th>
+      <th title="Actual Income minus Budget Income. Positive = above budget (favorable).">Income Var vs Budget</th>
+      <th title="Actual Expenses minus Budget Expenses. Negative = under budget (favorable).">Expense Var vs Budget</th>
+    </tr></thead>
+    <tbody>
+      {% for r in noi_vs_budget_top %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td><a href="{{ url_for('property_detail.show', run_id=run_id, property_name=r.property_name) }}">{{ r.property_name }}</a></td>
+        <td>{{ r.pm_name }}</td>
+        <td>{{ r.city }}</td>
+        <td class="currency">{{ r.actual_noi | currency }}</td>
+        <td class="currency">{{ r.budget_noi | currency }}</td>
+        <td class="currency {{ 'pos' if (r.noi_variance or 0) >= 0 else 'neg' }}">{{ r.noi_variance | currency }}</td>
+        <td class="pct {{ 'pos' if (r.noi_variance_pct or 0) >= 0 else 'neg' }}">{{ r.noi_variance_pct | pct }}</td>
+        <td class="currency {{ 'pos' if (r.income_variance or 0) >= 0 else 'neg' }}">{{ r.income_variance | currency }}</td>
+        <td class="currency {{ 'neg' if (r.expense_variance or 0) > 0 else 'pos' }}">{{ r.expense_variance | currency }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+<!-- NOI vs Budget — Top Negative Variances -->
+{% if noi_vs_budget_bottom %}
+<section class="card">
+  <h2>Top Negative NOI Variances vs Budget — {{ noi_vs_budget_latest_label }}</h2>
+  <p class="hint" style="margin-bottom:10px">Properties furthest <strong>below</strong> budget NOI for the latest period. Income Var = Actual − Budget Income; Expense Var = Actual − Budget Expenses (positive = over budget, unfavorable).</p>
+  <div class="table-scroll">
+  <table class="data-table" data-sortfilter>
+    <thead><tr>
+      <th>Rank</th><th>Property</th><th>PM</th><th>City</th>
+      <th title="Actual NOI for the period">Actual NOI</th>
+      <th title="Budgeted NOI for the period">Budget NOI</th>
+      <th title="Actual NOI minus Budget NOI">NOI Var vs Budget</th>
+      <th title="NOI Variance / |Budget NOI|">NOI Var %</th>
+      <th title="Actual Income minus Budget Income. Positive = above budget (favorable).">Income Var vs Budget</th>
+      <th title="Actual Expenses minus Budget Expenses. Negative = under budget (favorable).">Expense Var vs Budget</th>
+    </tr></thead>
+    <tbody>
+      {% for r in noi_vs_budget_bottom %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td><a href="{{ url_for('property_detail.show', run_id=run_id, property_name=r.property_name) }}">{{ r.property_name }}</a></td>
+        <td>{{ r.pm_name }}</td>
+        <td>{{ r.city }}</td>
+        <td class="currency">{{ r.actual_noi | currency }}</td>
+        <td class="currency">{{ r.budget_noi | currency }}</td>
+        <td class="currency {{ 'pos' if (r.noi_variance or 0) >= 0 else 'neg' }}">{{ r.noi_variance | currency }}</td>
+        <td class="pct {{ 'pos' if (r.noi_variance_pct or 0) >= 0 else 'neg' }}">{{ r.noi_variance_pct | pct }}</td>
+        <td class="currency {{ 'pos' if (r.income_variance or 0) >= 0 else 'neg' }}">{{ r.income_variance | currency }}</td>
+        <td class="currency {{ 'neg' if (r.expense_variance or 0) > 0 else 'pos' }}">{{ r.expense_variance | currency }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
 </section>
 {% endif %}
 

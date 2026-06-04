@@ -68,18 +68,38 @@ _SUMMARY_KPI_DEFINITIONS = [
     ("NOI/Unit",           "noi_per_unit",         "currency", None,  None,             False),
 ]
 
-# Keys eligible for YoY comparison in the web dashboard (mirrors main_workbook.py constants).
-# Currency keys get both a Δ$ value and a Δ% value; pct keys get Δpp only.
+# Budget-based YoY comparison: maps each KPI key to the field that should be used
+# when computing "current year budget vs prior year budget."  Keys absent from this
+# dict receive blank YoY cells (no budget equivalent exists for those metrics).
+_BUDGET_YOY_KEY: dict[str, str] = {
+    "actual_income":        "budget_income",
+    "budget_income":        "budget_income",
+    "income_variance":      "income_variance",      # how the actual-vs-budget gap shifted
+    "income_variance_pct":  "income_variance_pct",
+    "actual_expenses":      "budget_expenses",
+    "budget_expenses":      "budget_expenses",
+    "expense_variance":     "expense_variance",
+    "expense_variance_pct": "expense_variance_pct",
+    "actual_noi":           "budget_noi",
+    "budget_noi":           "budget_noi",
+    "noi_variance":         "noi_variance",
+    "noi_variance_pct":     "noi_variance_pct",
+    "eco_occ_pct":          "budget_eco_occ_pct",
+}
+
+# Currency keys show a $ delta + a % change column; pct keys show pp delta only.
 _YOY_CURRENCY_KEYS = frozenset({
-    "actual_income", "actual_expenses", "actual_noi",
-    "gpr", "vacancy", "concessions", "bad_debt", "net_collectible",
+    "actual_income", "budget_income", "income_variance",
+    "actual_expenses", "budget_expenses", "expense_variance",
+    "actual_noi", "budget_noi", "noi_variance",
 })
 _YOY_PCT_KEYS = frozenset({
-    "eco_occ_pct", "physical_occ_pct",
+    "income_variance_pct", "expense_variance_pct", "noi_variance_pct", "eco_occ_pct",
 })
 _YOY_FAVORABLE_IF_POSITIVE = frozenset({
-    "actual_income", "actual_noi", "net_collectible", "gpr",
-    "eco_occ_pct", "physical_occ_pct",
+    "actual_income", "budget_income",
+    "actual_noi",    "budget_noi",    "noi_variance",
+    "eco_occ_pct",
 })
 
 # % variance KPI keys that use a ±5% neutral band — no highlight within the band
@@ -320,19 +340,21 @@ def show(run_id):
         is_group_child = group_id is not None and not is_group_header
         values = [period_aggs.get(lbl, {}).get(key) for lbl in period_labels]
 
-        # Determine YoY type and per-pair deltas for this KPI row
-        if key in _YOY_CURRENCY_KEYS:
+        # Determine Budget YoY type: use the mapped budget field for comparison.
+        # Keys without a budget mapping get blank YoY cells.
+        bud_key  = _BUDGET_YOY_KEY.get(key)
+        if bud_key and key in _YOY_CURRENCY_KEYS:
             yoy_type = "currency"
-        elif key in _YOY_PCT_KEYS:
+        elif bud_key and key in _YOY_PCT_KEYS:
             yoy_type = "pct"
         else:
             yoy_type = None
 
         yoy_values = []
         for (prev_yr, curr_yr) in year_pairs:
-            if yoy_type is not None:
-                prev_val = year_aggs.get(prev_yr, {}).get(key)
-                curr_val = year_aggs.get(curr_yr, {}).get(key)
+            if yoy_type is not None and bud_key:
+                prev_val = year_aggs.get(prev_yr, {}).get(bud_key)
+                curr_val = year_aggs.get(curr_yr, {}).get(bud_key)
                 delta    = (curr_val - prev_val
                             if curr_val is not None and prev_val is not None
                             else None)
@@ -388,6 +410,48 @@ def show(run_id):
             else:
                 agg["is_below_eco_target"] = eco < eco_occ_target
             prop_rows.append(agg)
+
+    # ── NOI vs Budget ranking (latest period) ─────────────────────────────────
+    # Ranks all non-carveout properties by (Actual NOI - Budget NOI) for the most
+    # recent quarter in the dataset.  Income and Expense variance columns explain why.
+    noi_vs_budget_latest_label = ""
+    noi_vs_budget_top    = []   # top 5 most positive (on/above budget)
+    noi_vs_budget_bottom = []   # top 5 most negative (furthest below budget)
+
+    if sorted_quarters:
+        _lq_yr, _lq = sorted_quarters[0]
+        noi_vs_budget_latest_label = _quarter_label(_lq_yr, _lq)
+        _lq_months = {(_lq - 1) * 3 + 1, (_lq - 1) * 3 + 2, (_lq - 1) * 3 + 3}
+        _vb_rows = []
+        for prop in sorted(props):
+            pq = [k for k in kpis
+                  if k.get("property_name") == prop
+                  and k.get("year") == _lq_yr
+                  and k.get("month") in _lq_months
+                  and not k.get("is_carveout")]
+            if not pq:
+                continue
+            agg = _agg_kpis(pq)
+            an = agg.get("actual_noi")
+            bn = agg.get("budget_noi")
+            if an is None or bn is None:
+                continue
+            nv = an - bn
+            nv_pct = nv / abs(bn) if bn else None
+            _vb_rows.append({
+                "property_name":    prop,
+                "pm_name":          pq[0].get("pm_name", ""),
+                "city":             pq[0].get("city", ""),
+                "actual_noi":       an,
+                "budget_noi":       bn,
+                "noi_variance":     nv,
+                "noi_variance_pct": nv_pct,
+                "income_variance":  agg.get("income_variance"),
+                "expense_variance": agg.get("expense_variance"),
+            })
+        _vb_rows.sort(key=lambda r: r["noi_variance"] or 0)
+        noi_vs_budget_bottom = _vb_rows[:5]
+        noi_vs_budget_top    = list(reversed(_vb_rows))[:5]
 
     # ── AR Aging section ───────────────────────────────────────────────────────
     ar_rows = data.get("ar_aging", [])
@@ -492,4 +556,8 @@ def show(run_id):
         ar_summary=ar_summary,
         ar_prop_rows=ar_prop_rows,
         ar_latest_period_label=ar_latest_period_label,
+        # NOI vs Budget ranking
+        noi_vs_budget_top=noi_vs_budget_top,
+        noi_vs_budget_bottom=noi_vs_budget_bottom,
+        noi_vs_budget_latest_label=noi_vs_budget_latest_label,
     )

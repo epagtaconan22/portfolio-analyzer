@@ -47,20 +47,37 @@ _AR_MONTH_ABBR = {
     7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec",
 }
 
-# Keys that receive YoY comparison columns in the Dashboard KPI table.
+# Budget-based YoY comparison: maps each KPI key to the field looked up when
+# computing "current year budget vs prior year budget."  Keys absent → blank cells.
+_BUDGET_YOY_KEY: dict[str, str] = {
+    "actual_income":        "budget_income",
+    "budget_income":        "budget_income",
+    "income_variance":      "income_variance",
+    "income_variance_pct":  "income_variance_pct",
+    "actual_expenses":      "budget_expenses",
+    "budget_expenses":      "budget_expenses",
+    "expense_variance":     "expense_variance",
+    "expense_variance_pct": "expense_variance_pct",
+    "actual_noi":           "budget_noi",
+    "budget_noi":           "budget_noi",
+    "noi_variance":         "noi_variance",
+    "noi_variance_pct":     "noi_variance_pct",
+    "eco_occ_pct":          "budget_eco_occ_pct",
+}
+
 # Currency keys get both a Δ$ column and a Δ% column; pct keys get Δpp only.
 _YOY_CURRENCY_KEYS = frozenset({
-    "actual_income", "actual_expenses", "actual_noi",
-    "gpr", "vacancy", "concessions", "bad_debt", "net_collectible",
+    "actual_income", "budget_income", "income_variance",
+    "actual_expenses", "budget_expenses", "expense_variance",
+    "actual_noi", "budget_noi", "noi_variance",
 })
 _YOY_PCT_KEYS = frozenset({
-    "eco_occ_pct", "physical_occ_pct",
+    "income_variance_pct", "expense_variance_pct", "noi_variance_pct", "eco_occ_pct",
 })
-# YoY delta is FAVORABLE when POSITIVE for these keys;
-# all others in _YOY_CURRENCY_KEYS are favorable when negative (costs/losses going down).
 _YOY_FAVORABLE_IF_POSITIVE = frozenset({
-    "actual_income", "actual_noi", "net_collectible", "gpr",
-    "eco_occ_pct", "physical_occ_pct",
+    "actual_income", "budget_income",
+    "actual_noi",    "budget_noi",    "noi_variance",
+    "eco_occ_pct",
 })
 
 
@@ -205,9 +222,9 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
     for pair_idx, (prev_yr, curr_yr) in enumerate(year_pairs):
         yoy_delta_col = 2 + num_period_cols + pair_idx * 2
         yoy_pct_col   = yoy_delta_col + 1
-        cell = ws.cell(row, yoy_delta_col, f"YoY Δ\n{prev_yr}→{curr_yr}")
+        cell = ws.cell(row, yoy_delta_col, f"Bud Δ\n{prev_yr}→{curr_yr}")
         cell.alignment = Alignment(horizontal="center", wrap_text=True)
-        cell = ws.cell(row, yoy_pct_col, f"YoY % Chg\n{prev_yr}→{curr_yr}")
+        cell = ws.cell(row, yoy_pct_col, f"Bud Δ %\n{prev_yr}→{curr_yr}")
         cell.alignment = Alignment(horizontal="center", wrap_text=True)
     style_header_row(ws, row, total_kpi_cols)
     row += 1
@@ -280,9 +297,10 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
         for pair_idx, (prev_yr, curr_yr) in enumerate(year_pairs):
             yoy_delta_col = 2 + num_period_cols + pair_idx * 2
             yoy_pct_col   = yoy_delta_col + 1
-            if key in _YOY_CURRENCY_KEYS or key in _YOY_PCT_KEYS:
-                prev_val = year_aggs[prev_yr].get(key)
-                curr_val = year_aggs[curr_yr].get(key)
+            bud_key = _BUDGET_YOY_KEY.get(key)
+            if bud_key and (key in _YOY_CURRENCY_KEYS or key in _YOY_PCT_KEYS):
+                prev_val = year_aggs[prev_yr].get(bud_key)
+                curr_val = year_aggs[curr_yr].get(bud_key)
                 delta = (
                     curr_val - prev_val
                     if (curr_val is not None and prev_val is not None)
@@ -645,59 +663,85 @@ def _aggregate(kpis: list[PropertyPeriodKPIs]) -> dict:
 # ─── Dashboard section helpers ────────────────────────────────────────────────
 
 def _write_top_noi_table(ws, kpis, start_row, top_n, favorable):
-    headers = ["Rank", "Property", "PM", "Prior Year NOI", "Current Year NOI",
-               "NOI Variance", "NOI Variance %", "Driver 1", "Driver 2", "Commentary"]
+    """Rank properties by Actual NOI vs Budget NOI for the latest quarter.
+
+    Columns: Rank | Property | PM | City | Actual NOI | Budget NOI |
+             NOI Var vs Budget $ | NOI Var vs Budget % |
+             Income Var vs Budget | Expense Var vs Budget
+    """
+    headers = [
+        "Rank", "Property", "PM", "City",
+        "Actual NOI", "Budget NOI", "NOI Var vs Budget", "NOI Var %",
+        "Income Var vs Budget", "Expense Var vs Budget",
+    ]
     for col, h in enumerate(headers, 1):
         ws.cell(start_row, col, h)
     style_header_row(ws, start_row, len(headers), fill=_DARK_HDR_FILL, font=_DARK_HDR_FONT)
     ws.row_dimensions[start_row].height = 26
     row = start_row + 1
 
-    years = sorted({k.year for k in kpis})
-    if len(years) < 2:
-        ws.cell(row, 1, "Insufficient years for YoY comparison")
+    # Use the latest quarter's data
+    quarters = _get_sorted_quarters(kpis)   # newest first
+    if not quarters:
+        ws.cell(row, 1, "No data available.")
         return row + 1
 
-    curr_yr, prev_yr = years[-1], years[-2]
+    latest_yr, latest_q = quarters[0]
+    q_kpis = [k for k in _kpis_for_quarter(kpis, latest_yr, latest_q)
+              if not k.is_carveout]
 
-    curr_by_prop: dict[str, float] = {}
-    prev_by_prop: dict[str, float] = {}
-    meta_by_prop: dict[str, PropertyPeriodKPIs] = {}
-    for k in kpis:
-        if k.actual_noi is None:
-            continue
-        if k.year == curr_yr:
-            curr_by_prop[k.property_name] = curr_by_prop.get(k.property_name, 0) + k.actual_noi
-            meta_by_prop[k.property_name] = k
-        elif k.year == prev_yr:
-            prev_by_prop[k.property_name] = prev_by_prop.get(k.property_name, 0) + k.actual_noi
+    # Aggregate per property for the latest quarter
+    prop_groups: dict[str, list] = {}
+    for k in q_kpis:
+        prop_groups.setdefault(k.property_name, []).append(k)
 
     variances = []
-    for prop in curr_by_prop:
-        if prop in prev_by_prop:
-            var = curr_by_prop[prop] - prev_by_prop[prop]
-            variances.append((var, prop))
+    for prop, pklist in prop_groups.items():
+        agg = _aggregate(pklist)
+        actual_noi  = agg.get("actual_noi")
+        budget_noi  = agg.get("budget_noi")
+        if actual_noi is None or budget_noi is None:
+            continue
+        noi_var     = actual_noi - budget_noi
+        noi_var_pct = noi_var / abs(budget_noi) if budget_noi else None
+        income_var  = agg.get("income_variance")    # actual_income - budget_income
+        expense_var = agg.get("expense_variance")   # actual_expenses - budget_expenses
+        variances.append((
+            noi_var, prop, pklist[0].pm_name, pklist[0].city,
+            actual_noi, budget_noi, noi_var_pct, income_var, expense_var,
+        ))
 
     variances.sort(key=lambda x: x[0], reverse=favorable)
-    for rank, (var, prop) in enumerate(variances[:top_n], 1):
-        prev_noi = prev_by_prop[prop]
-        curr_noi = curr_by_prop[prop]
-        var_pct = var / abs(prev_noi) if prev_noi else None
-        k = meta_by_prop[prop]
-        # Alternating ice-blue rows
+
+    for rank, (noi_var, prop, pm, city,
+               actual_noi, budget_noi, noi_var_pct,
+               income_var, expense_var) in enumerate(variances[:top_n], 1):
         row_fill = _ICE_BLUE_FILL if rank % 2 == 1 else _WHITE_FILL
         for ci in range(1, len(headers) + 1):
             ws.cell(row, ci).fill = row_fill
         ws.cell(row, 1, rank)
         ws.cell(row, 2, prop)
-        ws.cell(row, 3, k.pm_name)
-        _c(ws, row, 4, prev_noi, CURRENCY_FMT)
-        _c(ws, row, 5, curr_noi, CURRENCY_FMT)
-        _c(ws, row, 6, var, CURRENCY_FMT)
-        _c(ws, row, 7, var_pct, VAR_PCT_FMT)
-        ws.cell(row, 8, k.top_noi_driver_1)
-        ws.cell(row, 9, k.top_noi_driver_2)
-        ws.cell(row, 10, k.commentary)
+        ws.cell(row, 3, pm)
+        ws.cell(row, 4, city)
+        _c(ws, row, 5, actual_noi,  CURRENCY_FMT)
+        _c(ws, row, 6, budget_noi,  CURRENCY_FMT)
+        _c(ws, row, 7, noi_var,     CURRENCY_FMT)
+        _c(ws, row, 8, noi_var_pct, VAR_PCT_FMT)
+        # Income variance: positive = above budget (favorable)
+        _c(ws, row, 9,  income_var,  CURRENCY_FMT)
+        if income_var is not None:
+            apply_variance_fill(ws.cell(row, 9),  income_var,  favorable_is_positive=True)
+        # Expense variance: positive = over budget (unfavorable)
+        _c(ws, row, 10, expense_var, CURRENCY_FMT)
+        if expense_var is not None:
+            apply_variance_fill(ws.cell(row, 10), expense_var, favorable_is_positive=False)
+        # NOI variance fill
+        if noi_var is not None:
+            apply_variance_fill(ws.cell(row, 7), noi_var, favorable_is_positive=True)
+        row += 1
+
+    if row == start_row + 1:
+        ws.cell(row, 1, "No properties with both actual and budget NOI for the latest period.")
         row += 1
     return row
 
