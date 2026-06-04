@@ -241,6 +241,26 @@ thead .yoy-col {
   max-width: 900px;
 }
 
+/* Info badge — hidden tooltip on section headers */
+.info-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #e5e7eb; color: #6b7280;
+  font-size: 10px; font-weight: 700; cursor: help;
+  margin-left: 6px; vertical-align: middle;
+  position: relative;
+}
+.info-badge:hover { background: #d1d5db; color: #374151; }
+
+/* Recently Stabilised section highlight */
+.card.stabilised { border-left: 3px solid #f59e0b; }
+.stabilised-badge {
+  display: inline-block; background: #fef3c7; color: #92400e;
+  border: 1px solid #f59e0b; border-radius: 4px;
+  font-size: 11px; font-weight: 600; padding: 1px 6px; margin-left: 6px;
+  vertical-align: middle;
+}
+
 /* Flash messages */
 .flash-messages { margin-bottom: 16px; }
 .flash {

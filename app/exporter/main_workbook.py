@@ -181,22 +181,24 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
     from openpyxl.worksheet.properties import Outline
     ws.sheet_properties.outlinePr = Outline(summaryBelow=False, summaryRight=False)
 
-    props = {k.property_name for k in kpis if not k.is_carveout}
+    props = {k.property_name for k in kpis if not k.is_carveout and not k.is_partial_year}
     num_props = len(props)
 
-    # ── Quarter-period aggregates ────────────────────────────────────────────
+    # ── Quarter-period aggregates (partial-year properties excluded) ─────────
     quarters = _get_sorted_quarters(kpis)
     period_labels = [_quarter_label(yr, q) for (yr, q) in quarters]
     period_aggs: dict[str, dict] = {}
     for (yr, q) in quarters:
-        q_kpis = [k for k in _kpis_for_quarter(kpis, yr, q) if not k.is_carveout]
+        q_kpis = [k for k in _kpis_for_quarter(kpis, yr, q)
+                  if not k.is_carveout and not k.is_partial_year]
         period_aggs[_quarter_label(yr, q)] = _aggregate(q_kpis)
 
-    # ── Annual aggregates and YoY year pairs ─────────────────────────────────
-    years_sorted = sorted({k.year for k in kpis if not k.is_carveout})
+    # ── Annual aggregates and YoY year pairs (partial-year excluded) ─────────
+    years_sorted = sorted({k.year for k in kpis if not k.is_carveout and not k.is_partial_year})
     year_aggs: dict[int, dict] = {}
     for yr in years_sorted:
-        yr_kpis = [k for k in kpis if k.year == yr and not k.is_carveout]
+        yr_kpis = [k for k in kpis
+                   if k.year == yr and not k.is_carveout and not k.is_partial_year]
         year_aggs[yr] = _aggregate(yr_kpis)
     # One year pair per consecutive year, newest first: [(2025, 2026), (2024, 2025), ...]
     year_pairs = list(reversed([(years_sorted[i], years_sorted[i + 1])
@@ -387,6 +389,64 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
     row += 1
     _write_below_target_table(ws, kpis, row, eco_occ_target,
                               use_budget_eco_occ=use_budget_eco_occ)
+
+    # ── Recently Stabilised / New Properties ─────────────────────────────────
+    partial_kpis = [k for k in kpis if k.is_partial_year and not k.is_carveout]
+    if partial_kpis:
+        # row position: find next empty row after the below-target table
+        # (use a large offset; the below-target table is small)
+        py_row = ws.max_row + 3
+        ws.cell(py_row, 1,
+            "Recently Stabilised / New Properties "
+            "(partial-year data — excluded from all portfolio totals and YoY comparisons)"
+        ).font = BOLD_FONT
+        py_row += 1
+
+        py_headers = [
+            "Property", "PM", "City", "Tenancy Type", "Total Units",
+            "Actual Income", "Actual Expenses", "Actual NOI",
+            "Budget NOI", "NOI Var vs Budget", "NOI Var %", "Eco Occ %",
+        ]
+        for ci, h in enumerate(py_headers, 1):
+            ws.cell(py_row, ci, h)
+        style_header_row(ws, py_row, len(py_headers), fill=_DARK_HDR_FILL, font=_DARK_HDR_FONT)
+        py_row += 1
+
+        # Aggregate per partial-year property for the latest quarter
+        py_quarters = _get_sorted_quarters(partial_kpis)
+        if py_quarters:
+            _py_yr, _py_q = py_quarters[0]
+            py_q_kpis = _kpis_for_quarter(partial_kpis, _py_yr, _py_q)
+            py_groups: dict[str, list] = {}
+            for k in py_q_kpis:
+                py_groups.setdefault(k.property_name, []).append(k)
+
+            for rank, (prop, pklist) in enumerate(sorted(py_groups.items()), 0):
+                agg = _aggregate(pklist)
+                row_fill = _ICE_BLUE_FILL if rank % 2 == 0 else _WHITE_FILL
+                for ci in range(1, len(py_headers) + 1):
+                    ws.cell(py_row, ci).fill = row_fill
+                ws.cell(py_row, 1, prop)
+                ws.cell(py_row, 2, pklist[0].pm_name)
+                ws.cell(py_row, 3, pklist[0].city)
+                ws.cell(py_row, 4, pklist[0].tenancy_type)
+                ws.cell(py_row, 5, agg.get("total_units") or "N/A")
+                _c(ws, py_row, 6,  agg.get("actual_income"),   CURRENCY_FMT)
+                _c(ws, py_row, 7,  agg.get("actual_expenses"),  CURRENCY_FMT)
+                _c(ws, py_row, 8,  agg.get("actual_noi"),       CURRENCY_FMT)
+                _c(ws, py_row, 9,  agg.get("budget_noi"),       CURRENCY_FMT)
+                noi_var = (agg.get("actual_noi") - agg.get("budget_noi")
+                           if agg.get("actual_noi") is not None and agg.get("budget_noi") is not None
+                           else None)
+                noi_var_pct = (noi_var / abs(agg.get("budget_noi"))
+                               if noi_var is not None and agg.get("budget_noi")
+                               else None)
+                _c(ws, py_row, 10, noi_var,     CURRENCY_FMT)
+                _c(ws, py_row, 11, noi_var_pct, VAR_PCT_FMT)
+                _c(ws, py_row, 12, agg.get("eco_occ_pct"), PCT_FMT)
+                if noi_var is not None:
+                    apply_variance_fill(ws.cell(py_row, 10), noi_var, favorable_is_positive=True)
+                py_row += 1
 
     # ── Column widths ────────────────────────────────────────────────────────
     ws.column_dimensions["A"].width = 28

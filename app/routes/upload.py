@@ -34,12 +34,15 @@ def run_analysis():
     eco_occ_target      = float(request.form.get("eco_occ_target", ECO_OCC_TARGET * 100)) / 100
     use_budget_eco_occ  = request.form.get("use_budget_eco_occ") == "1"
     pm_names_raw        = request.form.get("pm_names", "").strip()
-    excluded_raw   = request.form.get("excluded_properties", "").strip()
-    carveout_raw   = request.form.get("carveout_properties", "").strip()
+    excluded_raw     = request.form.get("excluded_properties", "").strip()
+    carveout_raw     = request.form.get("carveout_properties", "").strip()
+    stabilized_raw   = request.form.get("stabilized_properties", "").strip()
 
     excluded  = ({p.strip().lower() for p in excluded_raw.splitlines() if p.strip()}
                  | PERMANENT_EXCLUSIONS)
     carveouts = {p.strip().lower() for p in carveout_raw.splitlines() if p.strip()}
+    # Manually specified recently-stabilised / new properties (canonical names, exact match)
+    manual_stabilized = {p.strip() for p in stabilized_raw.splitlines() if p.strip()}
 
     fin_files = request.files.getlist("financial_files")
     occ_files = request.files.getlist("occupancy_file")
@@ -156,6 +159,17 @@ def run_analysis():
         k.city = meta.get("city", "")
         k.tenancy_type = meta.get("tenancy_type", "")
 
+    # ── Partial-year detection ────────────────────────────────────────────────────
+    # Auto-detect: a property is "partial year" if it has fewer months of data than
+    # the maximum any property has in the same year.  Newly stabilised properties
+    # typically show up in partial years (e.g. Estrella started mid-2024).
+    auto_partial: set[str] = _detect_partial_year(kpis)
+    partial_year_props = auto_partial | manual_stabilized  # union of both sources
+
+    for k in kpis:
+        if k.property_name in partial_year_props:
+            k.is_partial_year = True
+
     for k in kpis:
         if k.eco_occ_pct is not None:
             if use_budget_eco_occ and k.budget_eco_occ_pct is not None:
@@ -200,8 +214,11 @@ def run_analysis():
         "num_properties": len(props),
         "pm_names": pm_names_used,
         "source_files": [os.path.basename(p) for p in saved_paths],
-        "excluded_properties": list(excluded),
-        "carveout_properties": list(carveouts),
+        "excluded_properties":         sorted(excluded - PERMANENT_EXCLUSIONS),
+        "carveout_properties":         sorted(carveouts),
+        "partial_year_properties":     sorted(partial_year_props),
+        "manually_stabilized":         sorted(manual_stabilized),
+        "auto_detected_partial":       sorted(auto_partial),
         "main_workbook": os.path.basename(main_path),
         "backup_workbook": os.path.basename(backup_path),
         "ar_tenant_rent_periods": [f"{MONTHS[mo]}-{yr}" for (yr, mo) in ar_tr_periods],
@@ -219,3 +236,36 @@ def run_analysis():
             pass
 
     return redirect(url_for("results.show", run_id=run_id))
+
+
+def _detect_partial_year(kpis) -> set[str]:
+    """Auto-detect properties that have fewer months of data than the majority in any year.
+
+    For each year present in the KPI dataset, the 'expected' month count is the
+    maximum months any non-carveout property has.  Any property with fewer months
+    than that maximum in any year is flagged as partial-year.
+
+    Example: if most properties have 12 months of 2024 data but Estrella only
+    has 8 (stabilised mid-year), Estrella is flagged.  For a Q1-only analysis
+    every property has 3 months, so no partial-year is detected.
+    """
+    from collections import defaultdict
+
+    months_by: dict[str, dict[int, set]] = defaultdict(lambda: defaultdict(set))
+    for k in kpis:
+        if not k.is_carveout:
+            months_by[k.property_name][k.year].add(k.month)
+
+    # Maximum months any property has per year
+    all_years = {yr for prop_data in months_by.values() for yr in prop_data}
+    max_per_year: dict[int, int] = {}
+    for yr in all_years:
+        counts = [len(months_by[p][yr]) for p in months_by if yr in months_by[p]]
+        max_per_year[yr] = max(counts) if counts else 0
+
+    partial: set[str] = set()
+    for prop, yr_data in months_by.items():
+        for yr, months in yr_data.items():
+            if max_per_year.get(yr, 0) > 0 and len(months) < max_per_year[yr]:
+                partial.add(prop)
+    return partial

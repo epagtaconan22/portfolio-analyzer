@@ -115,6 +115,12 @@
       <span class="hint">Carve-out properties are shown in detail but excluded from portfolio totals.</span>
     </div>
     <div class="field">
+      <label for="stabilized_properties">Recently Stabilized / New Properties (one per line)</label>
+      <textarea id="stabilized_properties" name="stabilized_properties" rows="3"
+                placeholder="Estrella&#10;Skyline"></textarea>
+      <span class="hint">Properties with partial-year data excluded from all portfolio summary aggregates and YoY comparisons. They appear in a separate "Recently Stabilized" section. The system also auto-detects properties with fewer months of data than the rest of the portfolio — use this field to add any it misses.</span>
+    </div>
+    <div class="field">
       <label for="custom_mapping">Custom Account Mapping (CSV)</label>
       <input type="file" id="custom_mapping" name="custom_mapping" accept=".csv">
       <span class="hint">CSV columns: account_name, assigned_category, treatment, include_in_noi, include_in_eco_occ</span>

@@ -306,13 +306,17 @@ def show(run_id):
     sorted_quarters = sorted(all_quarters, reverse=True)
     period_labels = [_quarter_label(yr, q) for (yr, q) in sorted_quarters]
 
+    # partial-year properties are excluded from ALL portfolio aggregates
+    partial_year_props = set(meta.get("partial_year_properties", []))
+
     period_aggs: dict[str, dict] = {}
     period_property_counts: dict[str, int] = {}
     for (yr, q) in sorted_quarters:
         months = {(q - 1) * 3 + 1, (q - 1) * 3 + 2, (q - 1) * 3 + 3}
         q_kpis = [
             k for k in kpis
-            if k.get("year") == yr and k.get("month") in months and not k.get("is_carveout")
+            if k.get("year") == yr and k.get("month") in months
+            and not k.get("is_carveout") and not k.get("is_partial_year")
         ]
         lbl = _quarter_label(yr, q)
         period_aggs[lbl] = _agg_kpis(q_kpis)
@@ -325,7 +329,10 @@ def show(run_id):
     years_sorted = sorted({k["year"] for k in kpis if not k.get("is_carveout") and k.get("year")})
     year_aggs: dict[int, dict] = {}
     for yr in years_sorted:
-        yr_kpis = [k for k in kpis if k.get("year") == yr and not k.get("is_carveout")]
+        yr_kpis = [k for k in kpis
+                   if k.get("year") == yr
+                   and not k.get("is_carveout")
+                   and not k.get("is_partial_year")]
         year_aggs[yr] = _agg_kpis(yr_kpis)
     # One pair per consecutive year, newest first: [(2025, 2026), (2024, 2025), ...]
     year_pairs = list(reversed([(years_sorted[i], years_sorted[i + 1])
@@ -385,10 +392,13 @@ def show(run_id):
             "yoy_values":        yoy_values,
         })
 
-    # ── Property table ─────────────────────────────────────────────────────────
+    # ── Property table (full-year properties only) ────────────────────────────
     latest_yr = max(years) if years else None
     prop_rows = []
+    partial_year_rows = []
+
     for prop in sorted(props):
+        is_py = prop in partial_year_props
         prop_kpis = [
             k for k in kpis
             if k.get("property_name") == prop and k.get("year") == latest_yr
@@ -409,7 +419,11 @@ def show(run_id):
                 agg["is_below_eco_target"] = eco < agg["budget_eco_occ_pct"]
             else:
                 agg["is_below_eco_target"] = eco < eco_occ_target
-            prop_rows.append(agg)
+            agg["is_partial_year"] = is_py
+            if is_py:
+                partial_year_rows.append(agg)
+            else:
+                prop_rows.append(agg)
 
     # ── NOI vs Budget ranking (latest period) ─────────────────────────────────
     # Ranks all non-carveout properties by (Actual NOI - Budget NOI) for the most
@@ -428,7 +442,8 @@ def show(run_id):
                   if k.get("property_name") == prop
                   and k.get("year") == _lq_yr
                   and k.get("month") in _lq_months
-                  and not k.get("is_carveout")]
+                  and not k.get("is_carveout")
+                  and not k.get("is_partial_year")]
             if not pq:
                 continue
             agg = _agg_kpis(pq)
@@ -560,4 +575,7 @@ def show(run_id):
         noi_vs_budget_top=noi_vs_budget_top,
         noi_vs_budget_bottom=noi_vs_budget_bottom,
         noi_vs_budget_latest_label=noi_vs_budget_latest_label,
+        # Recently stabilised / partial-year properties
+        partial_year_rows=partial_year_rows,
+        partial_year_props=sorted(partial_year_props),
     )

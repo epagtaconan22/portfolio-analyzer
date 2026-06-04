@@ -54,7 +54,13 @@
 
 <!-- Portfolio Summary — transposed: KPI labels as rows, quarter-periods as columns -->
 <section class="card">
-  <h2>Portfolio Summary</h2>
+  <h2>Portfolio Summary
+    {%- if meta.excluded_properties or meta.carveout_properties or partial_year_props -%}
+    {%- set _excl = meta.excluded_properties | reject("equalto","west hollywood housing, lp") | list -%}
+    <span class="info-badge"
+      title="Excluded from analysis: {{ _excl | join(', ') or 'none' }} | Carve-outs (shown separately): {{ meta.carveout_properties | join(', ') or 'none' }} | Recently stabilised (separate section): {{ partial_year_props | join(', ') or 'none' }}">ⓘ</span>
+    {%- endif -%}
+  </h2>
   <div class="table-scroll">
   <table class="kpi-table kpi-transposed">
     <thead>
@@ -275,6 +281,54 @@
   </div>
   {% endif %}
 
+</section>
+{% endif %}
+
+<!-- Recently Stabilised / New Properties -->
+{% if partial_year_rows %}
+<section class="card stabilised">
+  <h2>Recently Stabilised / New Properties
+    <span class="stabilised-badge">Excluded from YoY &amp; Portfolio Totals</span>
+  </h2>
+  <p class="hint" style="margin-bottom:10px">
+    These properties have partial-year data and cannot be compared on an apples-to-apples basis with the rest of the portfolio.
+    They are excluded from all portfolio summary calculations and YoY comparisons.
+    {% if meta.auto_detected_partial %}Auto-detected: {{ meta.auto_detected_partial | join(', ') }}.{% endif %}
+    {% if meta.manually_stabilized %}Manually specified: {{ meta.manually_stabilized | join(', ') }}.{% endif %}
+  </p>
+  <div class="table-scroll">
+  <table class="data-table" data-sortfilter>
+    <thead><tr>
+      <th>Property</th><th>PM</th><th>City</th><th>Tenancy Type</th>
+      <th title="Total Units">Units</th>
+      <th title="Actual Income for latest year">Income</th>
+      <th title="Actual Expenses for latest year">Expenses</th>
+      <th title="Actual NOI for latest year">Actual NOI</th>
+      <th title="Budget NOI for latest year">Budget NOI</th>
+      <th title="Actual NOI minus Budget NOI">NOI Var vs Budget</th>
+      <th title="NOI Variance / |Budget NOI|">NOI Var %</th>
+      <th title="Economic Occupancy %">Eco Occ %</th>
+    </tr></thead>
+    <tbody>
+      {% for r in partial_year_rows %}
+      <tr>
+        <td><a href="{{ url_for('property_detail.show', run_id=run_id, property_name=r.property_name) }}">{{ r.property_name }}</a></td>
+        <td>{{ r.pm_name }}</td>
+        <td>{{ r.city }}</td>
+        <td>{{ r.tenancy_type }}</td>
+        <td>{{ r.total_units or '—' }}</td>
+        <td class="currency">{{ r.actual_income | currency }}</td>
+        <td class="currency">{{ r.actual_expenses | currency }}</td>
+        <td class="currency">{{ r.actual_noi | currency }}</td>
+        <td class="currency">{{ r.budget_noi | currency }}</td>
+        <td class="currency {{ 'pos' if (r.noi_variance or 0) >= 0 else 'neg' }}">{{ r.noi_variance | currency }}</td>
+        <td class="pct {{ 'pos' if (r.noi_variance_pct or 0) >= 0 else 'neg' }}">{{ r.noi_variance_pct | pct }}</td>
+        <td class="pct">{{ r.eco_occ_pct | pct }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
 </section>
 {% endif %}
 
