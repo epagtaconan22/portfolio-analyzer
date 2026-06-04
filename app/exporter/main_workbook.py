@@ -1247,6 +1247,12 @@ def _build_ar_aging(wb, ar_rows: list, portfolio_name: str, kpis=None) -> None:
         row += 1
         data_start = row
 
+        # Collect property names for this receivable type / each period (must come first)
+        rtype_props_by_period = {
+            (yr, mo): {r.property_name for r in rtype_rows if r.year == yr and r.month == mo}
+            for (yr, mo) in periods
+        }
+
         # Pre-compute period aggregates for this receivable type
         period_aggs = {}
         for (yr, mo) in periods:
@@ -1254,12 +1260,6 @@ def _build_ar_aging(wb, ar_rows: list, portfolio_name: str, kpis=None) -> None:
             if agg_val:
                 agg_val["bad_debt"] = _bd_for_period(rtype_props_by_period.get((yr, mo), set()), yr, mo)
             period_aggs[(yr, mo)] = agg_val
-
-        # Collect property names for this receivable type / each period
-        rtype_props_by_period = {
-            (yr, mo): {r.property_name for r in rtype_rows if r.year == yr and r.month == mo}
-            for (yr, mo) in periods
-        }
 
         # Four metric rows: Current Owed, Pre-payments, % >60 Days, Bad Debt Write-off
         metric_defs = [
