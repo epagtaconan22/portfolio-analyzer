@@ -226,6 +226,17 @@
           {% endif %}
         {% endfor %}
       </tr>
+      <!-- Bad Debt Write-off row (period columns only; no YoY for write-offs) -->
+      <tr>
+        <td title="Bad debt expense (write-offs) booked in financial statements. Combined TR + Subsidy. Source: accounts mapped to Bad Debt category.">Bad Debt Write-off</td>
+        {% for col in ar.cols %}
+          {% if col.type == 'period' %}
+            <td class="currency neg">{{ col.bad_debt | currency }}</td>
+          {% else %}
+            <td>—</td>
+          {% endif %}
+        {% endfor %}
+      </tr>
     </tbody>
   </table>
   </div>
@@ -251,6 +262,7 @@
         <th title="Subsidy credit balances">Sub Pre-payments</th>
         <th title="Subsidy % of charges 61+ days past due">Sub % &gt;60</th>
         <th title="YoY change in Subsidy % &gt;60 days">Sub YoY Δ % &gt;60</th>
+        <th title="Bad debt expense (write-offs) from financial statements for this period. Combined Tenant Rent + Subsidy. Source: accounts mapped to 'Bad Debt' category in the income statement.">Bad Debt Write-off</th>
       </tr>
     </thead>
     <tbody>
@@ -274,6 +286,7 @@
             {% if row.sub_yoy_pct_overdue_delta > 0 %}+{% endif %}{{ "%.1f pp"|format(row.sub_yoy_pct_overdue_delta * 100) }}
           {% else %}—{% endif %}
         </td>
+        <td class="currency neg">{{ row.bad_debt_writeoff | currency }}</td>
       </tr>
       {% endfor %}
     </tbody>

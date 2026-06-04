@@ -166,7 +166,7 @@ def build_main_workbook(
                      use_budget_eco_occ=use_budget_eco_occ)
     _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target)
     _build_monthly_kpis(wb, kpis)
-    _build_ar_aging(wb, ar_rows or [], portfolio_name)
+    _build_ar_aging(wb, ar_rows or [], portfolio_name, kpis=kpis)
 
     wb.save(output_path)
     return output_path
@@ -1163,7 +1163,7 @@ def _apply_property_variance_fills(ws, row, headers, agg):
                                 threshold=0.05)
 
 
-def _build_ar_aging(wb, ar_rows: list, portfolio_name: str) -> None:
+def _build_ar_aging(wb, ar_rows: list, portfolio_name: str, kpis=None) -> None:
     """4-block AR Aging tab: portfolio summaries (TR + Sub) + property analysis (TR + Sub)."""
     ws = wb.create_sheet("AR Aging")
 
@@ -1201,6 +1201,18 @@ def _build_ar_aging(wb, ar_rows: list, portfolio_name: str) -> None:
             "pct_overdue":  (over_60 / charge) if charge > 0 else None,
         }
 
+    # Bad-debt lookup from financial KPIs: (property_name, year, month) -> $
+    _bd: dict[tuple, float] = {}
+    if kpis:
+        for k in kpis:
+            key = (k.property_name, k.year, k.month)
+            _bd[key] = (_bd.get(key) or 0.0) + (k.bad_debt or 0.0)
+
+    def _bd_for_period(prop_names, yr: int, mo: int) -> float | None:
+        """Sum bad-debt write-offs across a set of properties for a given period."""
+        total = sum(_bd.get((p, yr, mo), 0.0) for p in prop_names)
+        return total if total else None
+
     # Unique table name counter to ensure uniqueness across all 4 blocks
     _table_counter = [0]
 
@@ -1236,15 +1248,27 @@ def _build_ar_aging(wb, ar_rows: list, portfolio_name: str) -> None:
         data_start = row
 
         # Pre-compute period aggregates for this receivable type
-        period_aggs = {(yr, mo): _agg(rtype, yr, mo) for (yr, mo) in periods}
+        period_aggs = {}
+        for (yr, mo) in periods:
+            agg_val = _agg(rtype, yr, mo)
+            if agg_val:
+                agg_val["bad_debt"] = _bd_for_period(rtype_props_by_period.get((yr, mo), set()), yr, mo)
+            period_aggs[(yr, mo)] = agg_val
 
-        # Three metric rows: Current Owed, Pre-payments, % >60 Days
+        # Collect property names for this receivable type / each period
+        rtype_props_by_period = {
+            (yr, mo): {r.property_name for r in rtype_rows if r.year == yr and r.month == mo}
+            for (yr, mo) in periods
+        }
+
+        # Four metric rows: Current Owed, Pre-payments, % >60 Days, Bad Debt Write-off
         metric_defs = [
             # (label, key, fmt, fav_pos, apply_yoy_fill)
             # $ amount rows carry no fill; only % >60 Days YoY delta gets shading
-            ("Current Owed", "current_owed", CURRENCY_FMT, False, False),
-            ("Pre-payments",  "prepayments",  CURRENCY_FMT, False, False),
-            ("% >60 Days",    "pct_overdue",  PCT_FMT,      False, True),
+            ("Current Owed",      "current_owed", CURRENCY_FMT, False, False),
+            ("Pre-payments",      "prepayments",  CURRENCY_FMT, False, False),
+            ("% >60 Days",        "pct_overdue",  PCT_FMT,      False, True),
+            ("Bad Debt Write-off","bad_debt",      CURRENCY_FMT, False, False),
         ]
         for m_idx, (label, key, fmt, fav_pos, apply_yoy_fill) in enumerate(metric_defs):
             # Alternating ice-blue fill
@@ -1300,6 +1324,7 @@ def _build_ar_aging(wb, ar_rows: list, portfolio_name: str) -> None:
             "Property", "PM",
             "Current Owed", "Pre-payments", "% >60 Days",
             "YoY $ Δ (Current Owed)", "YoY Δ (% >60)",
+            "Bad Debt Write-off",
         ]
         hdr_row = row
         for ci, h in enumerate(prop_headers, 1):
@@ -1351,6 +1376,10 @@ def _build_ar_aging(wb, ar_rows: list, portfolio_name: str) -> None:
                         # >5pp threshold for % >60 Days YoY delta
                         apply_variance_fill(ws.cell(row, 7), pct_delta,
                                             favorable_is_positive=False, threshold=0.05)
+            # Bad debt write-off from financial statements (col 8)
+            bd_val = _bd.get((prop_name, latest_yr, latest_mo))
+            if bd_val:
+                _c(ws, row, 8, bd_val, CURRENCY_FMT)
             row += 1
 
         # Excel Table for property analysis block (no freeze panes on AR Aging tab)

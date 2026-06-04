@@ -478,6 +478,13 @@ def show(run_id):
     ar_prop_rows: list = []
     ar_latest_period_label: str = ""
 
+    # Bad-debt lookup from financial KPIs: (property, year, month) -> bad_debt $
+    # bad_debt is the combined (TR+Sub) write-off expense for that property/period.
+    _bd: dict[tuple, float] = {}
+    for _k in kpis:
+        key = (_k["property_name"], _k["year"], _k["month"])
+        _bd[key] = (_bd.get(key) or 0.0) + (_k.get("bad_debt") or 0.0)
+
     if ar_rows:
         for rtype in ["Tenant Rent", "Subsidy"]:
             # Newest period first so columns read right-to-left chronologically
@@ -489,6 +496,10 @@ def show(run_id):
             cols = []
             for (yr, mo) in periods:
                 agg = _agg_ar(ar_rows, rtype, yr, mo)
+                # Sum bad-debt write-offs from financials for all properties in this period
+                period_props = {r["property_name"] for r in ar_rows
+                                if r["receivable_type"] == rtype and r["year"] == yr and r["month"] == mo}
+                bd_period = sum(_bd.get((p, yr, mo), 0.0) for p in period_props) or None
                 cols.append({
                     "type":         "period",
                     "label":        _ar_period_label(yr, mo),
@@ -496,6 +507,7 @@ def show(run_id):
                     "current_owed": agg["current_owed"] if agg else None,
                     "prepayments":  agg["prepayments"]  if agg else None,
                     "pct_overdue":  agg["pct_overdue"]  if agg else None,
+                    "bad_debt":     bd_period,
                 })
                 if (yr - 1, mo) in period_set:
                     curr = agg
@@ -548,6 +560,8 @@ def show(run_id):
                 "sub_prepayments":   sub_curr["prepayments"]   if sub_curr else None,
                 "sub_pct_overdue":   sub_curr["pct_overdue"]   if sub_curr else None,
                 "sub_yoy_pct_overdue_delta": _pct_delta(sub_curr, sub_prev),
+                # Bad debt / write-off from financial statements (combined TR + Sub)
+                "bad_debt_writeoff": _bd.get((prop, latest_yr_ar, latest_mo_ar)) or None,
             })
 
         # Sort by Tenant Rent current_owed descending
