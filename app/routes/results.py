@@ -232,10 +232,14 @@ def _agg_kpis(kpi_dicts: list[dict]) -> dict:
         phys_occ = None
 
     total_units = next((k["total_units"] for k in kpi_dicts if k.get("total_units") is not None), None)
+    # Sum all unit-months (units × months) so the per-unit figure is always a monthly rate:
+    #   single property Q1  → 79 units × 3 months = 237
+    #   portfolio Q1        → Σ(units_per_prop × 3) across all properties
+    total_unit_months = sum(k["total_units"] for k in kpi_dicts if k.get("total_units") is not None) or None
 
-    income_pu  = (actual_income   / total_units) if (actual_income   is not None and total_units) else None
-    expense_pu = (actual_expenses / total_units) if (actual_expenses is not None and total_units) else None
-    noi_pu     = (actual_noi      / total_units) if (actual_noi      is not None and total_units) else None
+    income_pu  = (actual_income   / total_unit_months) if (actual_income   is not None and total_unit_months) else None
+    expense_pu = (actual_expenses / total_unit_months) if (actual_expenses is not None and total_unit_months) else None
+    noi_pu     = (actual_noi      / total_unit_months) if (actual_noi      is not None and total_unit_months) else None
 
     def _safe_pct(num, denom):
         if num is None or denom is None or denom == 0:

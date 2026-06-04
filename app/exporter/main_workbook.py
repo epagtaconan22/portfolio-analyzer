@@ -688,7 +688,12 @@ def _aggregate(kpis: list[PropertyPeriodKPIs]) -> dict:
         phys_occ   = _occ_sum / _total_sum if _total_sum > 0 else None
     else:
         phys_occ = None
+    # For per-unit metrics use total unit-months as the denominator:
+    #   single property Q1  → units × 3 months  → monthly rate
+    #   portfolio     Q1    → Σ(units_per_prop × 3)  → monthly rate
+    # This is consistent regardless of the aggregation level.
     total_units = next((k.total_units for k in kpis if k.total_units is not None), None)
+    total_unit_months = sum(k.total_units for k in kpis if k.total_units is not None) or None
 
     def _safe_div(a, b):
         return (a - b) if (a is not None and b is not None) else None
@@ -700,9 +705,9 @@ def _aggregate(kpis: list[PropertyPeriodKPIs]) -> dict:
     expense_var = _safe_div(actual_expenses, budget_expenses)
     noi_var     = _safe_div(actual_noi, budget_noi)
 
-    income_pu  = (actual_income / total_units)   if (actual_income   is not None and total_units) else None
-    expense_pu = (actual_expenses / total_units) if (actual_expenses is not None and total_units) else None
-    noi_pu     = (actual_noi / total_units)      if (actual_noi      is not None and total_units) else None
+    income_pu  = (actual_income   / total_unit_months) if (actual_income   is not None and total_unit_months) else None
+    expense_pu = (actual_expenses / total_unit_months) if (actual_expenses is not None and total_unit_months) else None
+    noi_pu     = (actual_noi      / total_unit_months) if (actual_noi      is not None and total_unit_months) else None
 
     return dict(
         actual_income=actual_income, budget_income=budget_income,
