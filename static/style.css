@@ -241,6 +241,18 @@ thead .yoy-col {
   max-width: 900px;
 }
 
+/* Column group toggle controls (Projection / Budget Comparison expand buttons) */
+.col-group-controls {
+  display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;
+}
+.col-toggle-btn {
+  background: #e5e7eb; color: #374151; border: 1px solid #d1d5db;
+  border-radius: 4px; padding: 4px 10px; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: background 0.15s;
+}
+.col-toggle-btn:hover { background: #d1d5db; }
+.col-toggle-btn.active { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+
 /* Info badge — hidden tooltip on section headers */
 .info-badge {
   display: inline-flex; align-items: center; justify-content: center;

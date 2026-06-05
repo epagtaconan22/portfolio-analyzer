@@ -54,6 +54,20 @@
 
 <!-- Portfolio Summary — transposed: KPI labels as rows, quarter-periods as columns -->
 <section class="card">
+  {% if proj_yr_label or year_pairs %}
+  <div class="col-group-controls">
+    {% if proj_yr_label %}
+    <button class="col-toggle-btn" data-toggle-group="proj"
+            data-label="{{ proj_yr_label }} Projection"
+            onclick="toggleKpiColGroup('proj', this)">▶ {{ proj_yr_label }} Projection</button>
+    {% endif %}
+    {% if year_pairs %}
+    <button class="col-toggle-btn" data-toggle-group="buddelta"
+            data-label="Budget Comparison"
+            onclick="toggleKpiColGroup('buddelta', this)">▶ Budget Comparison</button>
+    {% endif %}
+  </div>
+  {% endif %}
   <h2>Portfolio Summary
     {%- if meta.excluded_properties or meta.carveout_properties or partial_year_props -%}
     {%- set _excl = meta.excluded_properties | reject("equalto","west hollywood housing, lp") | list -%}
@@ -68,10 +82,20 @@
         <th class="kpi-label-col">KPI</th>
         {% for lbl in period_labels %}
         <th>{{ lbl }}<br><span class="period-prop-count">{{ period_property_counts.get(lbl, 0) }} Properties</span></th>
+        {% if loop.first and proj_yr_label %}
+        <th class="proj-col" data-col-group="proj" style="display:none"
+            title="Annualised: Q1 {{ proj_yr_label }} actual + estimated Q2–Q4 budget (Q1 budget × 3 if full-year budget not available)">Projected<br>Full Year {{ proj_yr_label }}</th>
+        <th class="proj-col" data-col-group="proj" style="display:none"
+            title="Full-year {{ proj_yr_label }} budget (annualised from Q1 if full-year budget not uploaded)">Full Year {{ proj_yr_label }}<br>Budget</th>
+        <th class="proj-col" data-col-group="proj" style="display:none"
+            title="Projected Full Year minus Full Year Budget. Positive = on track to exceed plan.">Variance<br>to Plan {{ proj_yr_label }}</th>
+        {% endif %}
         {% endfor %}
         {% for (prev_yr, curr_yr) in year_pairs %}
-        <th class="yoy-col" title="Budget comparison: {{ curr_yr }} budgeted amount vs {{ prev_yr }} budgeted amount. Shows whether the budget itself became more or less ambitious year-over-year.">Bud Δ<br><span class="period-prop-count">{{ prev_yr }}→{{ curr_yr }}</span></th>
-        <th class="yoy-col" title="Budget comparison % change: {{ curr_yr }} budget vs {{ prev_yr }} budget.">Bud Δ %<br><span class="period-prop-count">{{ prev_yr }}→{{ curr_yr }}</span></th>
+        <th class="yoy-col buddelta-col" data-col-group="buddelta" style="display:none"
+            title="Budget comparison: {{ curr_yr }} budgeted amount vs {{ prev_yr }} budgeted amount.">Bud Δ $<br><span class="period-prop-count">{{ prev_yr }}→{{ curr_yr }}</span></th>
+        <th class="yoy-col buddelta-col" data-col-group="buddelta" style="display:none"
+            title="Budget comparison % change: {{ curr_yr }} budget vs {{ prev_yr }} budget.">Bud Δ %<br><span class="period-prop-count">{{ prev_yr }}→{{ curr_yr }}</span></th>
         {% endfor %}
       </tr>
     </thead>
@@ -83,20 +107,59 @@
       <tr class="kpi-group-header" data-group="{{ row.group_id }}"
           onclick="toggleKpiGroup('{{ row.group_id }}')">
         <td class="kpi-label" title="{{ row.tooltip }}">{{ row.label }}</td>
-        {% for val in row.period_values %}{{ kpi_value_cell(val, row.fmt, row.favorable_positive, row.color_threshold) }}{% endfor %}
-        {% for yoy in row.yoy_values %}{{ yoy_delta_cell(yoy.delta, row.fmt, yoy.favorable_positive) }}{{ yoy_pct_cell(yoy.pct_chg, row.yoy_type, yoy.favorable_positive) }}{% endfor %}
+        {% for val in row.period_values %}
+          {{ kpi_value_cell(val, row.fmt, row.favorable_positive, row.color_threshold) }}
+          {% if loop.first and proj_yr_label %}
+            {%- set pfy = row.proj_values.get('proj_fy') -%}
+            {%- set fbud = row.proj_values.get('fy_budget') -%}
+            {%- set vtp = row.proj_values.get('var_to_plan') -%}
+            <td class="currency proj-col" data-col-group="proj" style="display:none">{{ pfy | currency if pfy is not none else '—' }}</td>
+            <td class="currency proj-col" data-col-group="proj" style="display:none">{{ fbud | currency if fbud is not none else '—' }}</td>
+            <td class="currency proj-col {{ 'pos' if vtp is not none and vtp >= 0 else 'neg' if vtp is not none else '' }}" data-col-group="proj" style="display:none">{{ vtp | currency if vtp is not none else '—' }}</td>
+          {% endif %}
+        {% endfor %}
+        {% for yoy in row.yoy_values %}
+          <td class="currency buddelta-col" data-col-group="buddelta" style="display:none">{{ yoy.delta | currency if yoy.delta is not none else '—' }}</td>
+          <td class="pct buddelta-col" data-col-group="buddelta" style="display:none">{{ yoy.pct_chg | pct if yoy.pct_chg is not none else '—' }}</td>
+        {% endfor %}
       </tr>
       {% elif row.is_group_child %}
       <tr class="kpi-group-child" data-parent="{{ row.group_id }}">
         <td class="kpi-label" title="{{ row.tooltip }}">{{ row.label }}</td>
-        {% for val in row.period_values %}{{ kpi_value_cell(val, row.fmt, row.favorable_positive, row.color_threshold) }}{% endfor %}
-        {% for yoy in row.yoy_values %}{{ yoy_delta_cell(yoy.delta, row.fmt, yoy.favorable_positive) }}{{ yoy_pct_cell(yoy.pct_chg, row.yoy_type, yoy.favorable_positive) }}{% endfor %}
+        {% for val in row.period_values %}
+          {{ kpi_value_cell(val, row.fmt, row.favorable_positive, row.color_threshold) }}
+          {% if loop.first and proj_yr_label %}
+            {%- set pfy = row.proj_values.get('proj_fy') -%}
+            {%- set fbud = row.proj_values.get('fy_budget') -%}
+            {%- set vtp = row.proj_values.get('var_to_plan') -%}
+            <td class="currency proj-col" data-col-group="proj" style="display:none">{{ pfy | currency if pfy is not none else '—' }}</td>
+            <td class="currency proj-col" data-col-group="proj" style="display:none">{{ fbud | currency if fbud is not none else '—' }}</td>
+            <td class="currency proj-col {{ 'pos' if vtp is not none and vtp >= 0 else 'neg' if vtp is not none else '' }}" data-col-group="proj" style="display:none">{{ vtp | currency if vtp is not none else '—' }}</td>
+          {% endif %}
+        {% endfor %}
+        {% for yoy in row.yoy_values %}
+          <td class="currency buddelta-col" data-col-group="buddelta" style="display:none">{{ yoy.delta | currency if yoy.delta is not none else '—' }}</td>
+          <td class="pct buddelta-col" data-col-group="buddelta" style="display:none">{{ yoy.pct_chg | pct if yoy.pct_chg is not none else '—' }}</td>
+        {% endfor %}
       </tr>
       {% else %}
       <tr>
         <td class="kpi-label" title="{{ row.tooltip }}">{{ row.label }}</td>
-        {% for val in row.period_values %}{{ kpi_value_cell(val, row.fmt, row.favorable_positive, row.color_threshold) }}{% endfor %}
-        {% for yoy in row.yoy_values %}{{ yoy_delta_cell(yoy.delta, row.fmt, yoy.favorable_positive) }}{{ yoy_pct_cell(yoy.pct_chg, row.yoy_type, yoy.favorable_positive) }}{% endfor %}
+        {% for val in row.period_values %}
+          {{ kpi_value_cell(val, row.fmt, row.favorable_positive, row.color_threshold) }}
+          {% if loop.first and proj_yr_label %}
+            {%- set pfy = row.proj_values.get('proj_fy') -%}
+            {%- set fbud = row.proj_values.get('fy_budget') -%}
+            {%- set vtp = row.proj_values.get('var_to_plan') -%}
+            <td class="currency proj-col" data-col-group="proj" style="display:none">{{ pfy | currency if pfy is not none else '—' }}</td>
+            <td class="currency proj-col" data-col-group="proj" style="display:none">{{ fbud | currency if fbud is not none else '—' }}</td>
+            <td class="currency proj-col {{ 'pos' if vtp is not none and vtp >= 0 else 'neg' if vtp is not none else '' }}" data-col-group="proj" style="display:none">{{ vtp | currency if vtp is not none else '—' }}</td>
+          {% endif %}
+        {% endfor %}
+        {% for yoy in row.yoy_values %}
+          <td class="currency buddelta-col" data-col-group="buddelta" style="display:none">{{ yoy.delta | currency if yoy.delta is not none else '—' }}</td>
+          <td class="pct buddelta-col" data-col-group="buddelta" style="display:none">{{ yoy.pct_chg | pct if yoy.pct_chg is not none else '—' }}</td>
+        {% endfor %}
       </tr>
       {% endif %}
       {% endfor %}
@@ -439,6 +502,17 @@
 {% endif %}
 
 <script>
+function toggleKpiColGroup(group, btn) {
+  var cells = document.querySelectorAll('[data-col-group="' + group + '"]');
+  var hidden = cells.length > 0 && cells[0].style.display === 'none';
+  for (var i = 0; i < cells.length; i++) {
+    cells[i].style.display = hidden ? '' : 'none';
+  }
+  if (btn) {
+    btn.textContent = (hidden ? '▼ ' : '▶ ') + btn.dataset.label;
+    btn.classList.toggle('active', hidden);
+  }
+}
 function toggleKpiGroup(groupId) {
   var header = document.querySelector('[data-group="' + groupId + '"]');
   var children = document.querySelectorAll('[data-parent="' + groupId + '"]');

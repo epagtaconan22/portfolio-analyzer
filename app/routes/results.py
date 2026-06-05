@@ -38,17 +38,14 @@ _SUMMARY_KPI_DEFINITIONS = [
     ("Actual Income",      "actual_income",        "currency", None,  "group_income",   True),
     ("Budget Income",      "budget_income",        "currency", None,  "group_income",   False),
     ("Income Variance",    "income_variance",      "currency", True,  "group_income",   False),
-    ("Income Variance %",  "income_variance_pct",  "pct",      True,  "group_income",   False),
     None,
     ("Actual Expenses",    "actual_expenses",      "currency", None,  "group_expenses", True),
     ("Budget Expenses",    "budget_expenses",      "currency", None,  "group_expenses", False),
     ("Expense Variance",   "expense_variance",     "currency", False, "group_expenses", False),
-    ("Expense Variance %", "expense_variance_pct", "pct",      False, "group_expenses", False),
     None,
     ("Actual NOI",         "actual_noi",           "currency", None,  "group_noi",      True),
     ("Budget NOI",         "budget_noi",           "currency", None,  "group_noi",      False),
     ("NOI Variance",       "noi_variance",         "currency", True,  "group_noi",      False),
-    ("NOI Variance %",     "noi_variance_pct",     "pct",      True,  "group_noi",      False),
     None,
     ("GPR",                "gpr",                  "currency", None,  "group_gpr",      True),
     ("Vacancy",            "vacancy",              "currency", None,  "group_gpr",      False),
@@ -342,6 +339,36 @@ def show(run_id):
     year_pairs = list(reversed([(years_sorted[i], years_sorted[i + 1])
                                 for i in range(len(years_sorted) - 1)]))
 
+    # ── Full-year projection (must precede summary_kpi_rows loop) ─────────────
+    proj_yr       = max(years_sorted) if years_sorted else None
+    proj_yr_label = str(proj_yr) if proj_yr else ""
+    projection_data: dict[str, dict] = {}
+
+    if proj_yr:
+        _q1k   = [k for k in kpis if k.get("year") == proj_yr and k.get("month") in {1,2,3}
+                  and not k.get("is_carveout") and not k.get("is_partial_year")]
+        _q2q4k = [k for k in kpis if k.get("year") == proj_yr and k.get("month") in range(4,13)
+                  and not k.get("is_carveout") and not k.get("is_partial_year")]
+        _ayk   = [k for k in kpis if k.get("year") == proj_yr
+                  and not k.get("is_carveout") and not k.get("is_partial_year")]
+        q1a    = _agg_kpis(_q1k)
+        q2q4a  = _agg_kpis(_q2q4k)
+        aya    = _agg_kpis(_ayk)
+        for pk, bk in [("actual_income","budget_income"),
+                       ("actual_expenses","budget_expenses"),
+                       ("actual_noi","budget_noi")]:
+            q1_act   = q1a.get(pk)
+            q2q4_bud = q2q4a.get(bk)
+            if not q2q4_bud:
+                q1_bud   = q1a.get(bk)
+                q2q4_bud = (q1_bud * 3) if q1_bud is not None else None
+                fy_bud   = (q1_bud * 4) if q1_bud is not None else None
+            else:
+                fy_bud = aya.get(bk)
+            proj_fy = (q1_act + q2q4_bud) if (q1_act is not None and q2q4_bud is not None) else None
+            var     = (proj_fy - fy_bud)   if (proj_fy is not None and fy_bud is not None) else None
+            projection_data[pk] = {"proj_fy": proj_fy, "fy_budget": fy_bud, "var_to_plan": var}
+
     summary_kpi_rows = []
     for defn in _SUMMARY_KPI_DEFINITIONS:
         if defn is None:
@@ -394,6 +421,7 @@ def show(run_id):
             "is_group_child":    is_group_child,
             "yoy_type":          yoy_type,
             "yoy_values":        yoy_values,
+            "proj_values":       projection_data.get(key, {}),
         })
 
     # ── Property table (full-year properties only) ────────────────────────────
@@ -596,4 +624,7 @@ def show(run_id):
         # Recently stabilised / partial-year properties
         partial_year_rows=partial_year_rows,
         partial_year_props=sorted(partial_year_props),
+        # Full-year projection
+        proj_yr_label=proj_yr_label,
+        projection_data=projection_data,
     )

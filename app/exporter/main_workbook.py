@@ -119,17 +119,14 @@ _DASHBOARD_KPI_ROWS = [
     ("Actual Income",       "actual_income",        CURRENCY_FMT),
     ("Budget Income",       "budget_income",        CURRENCY_FMT),
     ("Income Variance",     "income_variance",      CURRENCY_FMT),
-    ("Income Variance %",   "income_variance_pct",  PCT_FMT),
     None,
     ("Actual Expenses",     "actual_expenses",      CURRENCY_FMT),
     ("Budget Expenses",     "budget_expenses",      CURRENCY_FMT),
     ("Expense Variance",    "expense_variance",     CURRENCY_FMT),
-    ("Expense Variance %",  "expense_variance_pct", PCT_FMT),
     None,
     ("Actual NOI",          "actual_noi",           CURRENCY_FMT),
     ("Budget NOI",          "budget_noi",           CURRENCY_FMT),
     ("NOI Variance",        "noi_variance",         CURRENCY_FMT),
-    ("NOI Variance %",      "noi_variance_pct",     PCT_FMT),
     None,
     ("GPR",                 "gpr",                  CURRENCY_FMT),
     ("Vacancy",             "vacancy",              CURRENCY_FMT),
@@ -210,9 +207,49 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
     ws.cell(row, 1).font = BOLD_FONT
     row += 2
 
-    # ── Transposed KPI table: KPI label | Q1-2024 | Q2-2024 | ... | YoY cols ─
-    num_period_cols = len(period_labels)
-    total_kpi_cols = 1 + num_period_cols + len(year_pairs) * 2
+    # ── Full-year projection (annualised from latest year Q1 × 4) ────────────
+    proj_yr     = years_sorted[-1] if years_sorted else None
+    proj_data: dict[str, dict] = {}
+    _PROJ_KEYS = [("actual_income","budget_income"),
+                  ("actual_expenses","budget_expenses"),
+                  ("actual_noi","budget_noi")]
+
+    if proj_yr:
+        _q1k   = [k for k in kpis if k.year == proj_yr and k.month in (1,2,3)
+                  and not k.is_carveout and not k.is_partial_year]
+        _q2q4k = [k for k in kpis if k.year == proj_yr and k.month in range(4,13)
+                  and not k.is_carveout and not k.is_partial_year]
+        _ayk   = [k for k in kpis if k.year == proj_yr
+                  and not k.is_carveout and not k.is_partial_year]
+        q1a    = _aggregate(_q1k)
+        q2q4a  = _aggregate(_q2q4k)
+        aya    = _aggregate(_ayk)
+        for pk, bk in _PROJ_KEYS:
+            q1_act   = q1a.get(pk)
+            q2q4_bud = q2q4a.get(bk)
+            if not q2q4_bud:
+                q1_bud   = q1a.get(bk)
+                q2q4_bud = (q1_bud * 3) if q1_bud else None
+                fy_bud   = (q1_bud * 4) if q1_bud else None
+            else:
+                fy_bud = aya.get(bk)
+            proj_fy = (q1_act + q2q4_bud) if (q1_act is not None and q2q4_bud is not None) else None
+            var     = (proj_fy - fy_bud)   if (proj_fy is not None and fy_bud is not None) else None
+            proj_data[pk] = {"proj_fy": proj_fy, "fy_budget": fy_bud, "var_to_plan": var}
+
+    # ── Transposed KPI table: KPI label | Q1 | [PROJ GROUP] | Q4 | ... | [BUD Δ GROUP]
+    # Column layout:
+    #   col 2 … num_period_cols+1 : period columns (always visible)
+    #   col num_period_cols+2 … +4: projection group (3 cols, Excel outline level 1, hidden)
+    #   remaining cols             : Bud Δ $ columns (one per pair, outline level 1, hidden)
+    num_period_cols  = len(period_labels)
+    num_proj_cols    = 3 if proj_yr else 0   # Projected FY | FY Budget | Var to Plan
+    num_buddelta_cols = len(year_pairs)       # only $ delta, no % (moved to group, % removed)
+    total_kpi_cols   = 1 + num_period_cols + num_proj_cols + num_buddelta_cols
+
+    # Column index helpers
+    proj_start_col    = 2 + num_period_cols              # first projection column
+    buddelta_start_col = proj_start_col + num_proj_cols  # first budget-delta column
 
     # Header row
     kpi_header_row = row
@@ -220,15 +257,29 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
     for col_idx, lbl in enumerate(period_labels, 2):
         cell = ws.cell(row, col_idx, lbl)
         cell.alignment = Alignment(horizontal="center")
-    # YoY column headers — two columns per year pair
+
+    # Projection column headers (expandable, hidden by default)
+    if proj_yr:
+        proj_hdrs = [
+            f"Projected Full Year {proj_yr}\n(Q1 Actual + Q2–Q4 Budget)",
+            f"Full Year {proj_yr} Budget",
+            f"Variance to Plan {proj_yr}",
+        ]
+        for i, hdr in enumerate(proj_hdrs):
+            c = ws.cell(row, proj_start_col + i, hdr)
+            c.alignment = Alignment(horizontal="center", wrap_text=True)
+            c.font = Font(bold=True, color="FFFFFF", size=10)
+            c.fill = PatternFill("solid", fgColor="5B9BD5")   # lighter blue for projection group
+
+    # Bud Δ $ column headers (expandable, hidden by default — % column removed)
     for pair_idx, (prev_yr, curr_yr) in enumerate(year_pairs):
-        yoy_delta_col = 2 + num_period_cols + pair_idx * 2
-        yoy_pct_col   = yoy_delta_col + 1
-        cell = ws.cell(row, yoy_delta_col, f"Bud Δ\n{prev_yr}→{curr_yr}")
+        bc = buddelta_start_col + pair_idx
+        cell = ws.cell(row, bc, f"Bud Δ $\n{prev_yr}→{curr_yr}")
         cell.alignment = Alignment(horizontal="center", wrap_text=True)
-        cell = ws.cell(row, yoy_pct_col, f"Bud Δ %\n{prev_yr}→{curr_yr}")
-        cell.alignment = Alignment(horizontal="center", wrap_text=True)
-    style_header_row(ws, row, total_kpi_cols)
+        cell.font = Font(bold=True, color="FFFFFF", size=10)
+        cell.fill = PatternFill("solid", fgColor="7F7F7F")   # grey for budget comparison
+
+    style_header_row(ws, row, 1 + num_period_cols)   # style only visible cols in blue
     row += 1
 
     _PARENT_FILL = PatternFill("solid", fgColor="2E75B6")
@@ -295,37 +346,32 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
                     cm.height = 100 + 14 * len(excluded_u)
                     c.comment = cm
 
-        # YoY columns — annual aggregate comparisons
+        # Projection columns (Projected FY | FY Budget | Var to Plan)
+        if proj_yr and key in proj_data:
+            pd_row = proj_data[key]
+            _c(ws, row, proj_start_col,     pd_row.get("proj_fy"),     CURRENCY_FMT)
+            _c(ws, row, proj_start_col + 1, pd_row.get("fy_budget"),   CURRENCY_FMT)
+            _c(ws, row, proj_start_col + 2, pd_row.get("var_to_plan"), CURRENCY_FMT)
+            if pd_row.get("var_to_plan") is not None:
+                fav = key in ("actual_income", "actual_noi")
+                apply_variance_fill(ws.cell(row, proj_start_col + 2),
+                                    pd_row["var_to_plan"], favorable_is_positive=fav)
+
+        # Bud Δ $ columns only (% column removed; moved to collapsible group)
         for pair_idx, (prev_yr, curr_yr) in enumerate(year_pairs):
-            yoy_delta_col = 2 + num_period_cols + pair_idx * 2
-            yoy_pct_col   = yoy_delta_col + 1
+            bc = buddelta_start_col + pair_idx
             bud_key = _BUDGET_YOY_KEY.get(key)
             if bud_key and (key in _YOY_CURRENCY_KEYS or key in _YOY_PCT_KEYS):
                 prev_val = year_aggs[prev_yr].get(bud_key)
                 curr_val = year_aggs[curr_yr].get(bud_key)
-                delta = (
-                    curr_val - prev_val
-                    if (curr_val is not None and prev_val is not None)
-                    else None
-                )
-                delta_cell = ws.cell(row, yoy_delta_col, delta)
-                delta_cell.number_format = fmt  # $ or % format matching the KPI row
+                delta = (curr_val - prev_val
+                         if (curr_val is not None and prev_val is not None)
+                         else None)
+                delta_cell = ws.cell(row, bc, delta)
+                delta_cell.number_format = fmt
                 if delta is not None:
                     fav = key in _YOY_FAVORABLE_IF_POSITIVE
                     apply_variance_fill(delta_cell, delta, favorable_is_positive=fav)
-                if key in _YOY_CURRENCY_KEYS:
-                    # % change column only for dollar-amount KPIs
-                    pct_chg = (
-                        delta / abs(prev_val)
-                        if (delta is not None and prev_val)
-                        else None
-                    )
-                    pct_cell = ws.cell(row, yoy_pct_col, pct_chg)
-                    pct_cell.number_format = PCT_FMT
-                    if pct_chg is not None:
-                        fav = key in _YOY_FAVORABLE_IF_POSITIVE
-                        apply_variance_fill(pct_cell, pct_chg, favorable_is_positive=fav)
-                # For PCT keys the % Chg column stays blank (pp delta is sufficient)
 
         if label in _GROUP_PARENTS:
             for col_idx in range(1, total_kpi_cols + 1):
@@ -339,6 +385,20 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
         row += 1
 
     kpi_end_row = row - 1
+
+    # ── Excel column groups: projection (hidden by default) + Bud Δ (hidden) ─
+    # Projection columns: collapsed/hidden, expand left (summaryRight=False set above)
+    for ci in range(num_proj_cols):
+        col_l = get_column_letter(proj_start_col + ci)
+        ws.column_dimensions[col_l].outline_level = 1
+        ws.column_dimensions[col_l].hidden = True
+        ws.column_dimensions[col_l].width = 18
+    # Budget-delta columns: also collapsed/hidden
+    for ci in range(num_buddelta_cols):
+        col_l = get_column_letter(buddelta_start_col + ci)
+        ws.column_dimensions[col_l].outline_level = 1
+        ws.column_dimensions[col_l].hidden = True
+        ws.column_dimensions[col_l].width = 16
 
     # ── Portfolio Summary (right of KPI table, merged cells) ─────────────────
     summary_start_col = total_kpi_cols + 2
