@@ -210,7 +210,39 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
     row = 1
     ws.cell(row, 1, f"{portfolio_name} — Portfolio Summary ({num_props} Properties)")
     ws.cell(row, 1).font = BOLD_FONT
-    row += 2
+    row += 1
+
+    # ── Exclusions note (row 2 when present) ─────────────────────────────────
+    carveout_names   = sorted({k.property_name for k in kpis if k.is_carveout})
+    partial_yr_names = sorted({k.property_name for k in kpis
+                                if k.is_partial_year and not k.is_carveout})
+    _excl_parts = []
+    if carveout_names:
+        _excl_parts.append(
+            f"Carve-outs ({len(carveout_names)}): "
+            + ", ".join(carveout_names)
+            + " — included in property detail tabs; excluded from all portfolio totals."
+        )
+    if partial_yr_names:
+        _excl_parts.append(
+            f"Partial-year / recently stabilised ({len(partial_yr_names)}): "
+            + ", ".join(partial_yr_names)
+            + " — excluded from portfolio totals and YoY comparisons; "
+              "shown in the “Recently Stabilised” section below."
+        )
+    if _excl_parts:
+        _note_text = (
+            "⚠  Properties excluded from portfolio totals:  "
+            + "    |    ".join(_excl_parts)
+        )
+        _note_cell = ws.cell(row, 1, _note_text)
+        _note_cell.fill = PatternFill("solid", fgColor="FFF2CC")   # light amber
+        _note_cell.font = Font(italic=True, size=9, color="7F6000")
+        _note_cell.alignment = Alignment(wrap_text=True)
+        ws.row_dimensions[row].height = 45
+        row += 1
+
+    row += 1   # blank row before KPI table
 
     # ── Full-year projection (annualised from latest year Q1 × 4) ────────────
     proj_yr     = years_sorted[-1] if years_sorted else None
