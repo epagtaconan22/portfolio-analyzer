@@ -159,11 +159,16 @@ def build_main_workbook(
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
 
+    years_sorted = sorted({k.year for k in kpis
+                            if not k.is_carveout and not k.is_partial_year})
+    proj_yr = years_sorted[-1] if years_sorted else None
+
     _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=ar_rows,
                      use_budget_eco_occ=use_budget_eco_occ)
     _build_property_analysis(wb, kpis, portfolio_name, eco_occ_target)
     _build_monthly_kpis(wb, kpis)
     _build_ar_aging(wb, ar_rows or [], portfolio_name, kpis=kpis)
+    _build_property_projections(wb, kpis, portfolio_name, proj_yr)
 
     wb.save(output_path)
     return output_path
@@ -449,6 +454,18 @@ def _build_dashboard(wb, kpis, portfolio_name, eco_occ_target, ar_rows=None,
     row += 1
     _write_below_target_table(ws, kpis, row, eco_occ_target,
                               use_budget_eco_occ=use_budget_eco_occ)
+
+    # ── Per-Property Full Year Projection Summary ─────────────────────────────
+    if proj_yr:
+        prop_proj_rows = _compute_property_projections(kpis, proj_yr)
+        if prop_proj_rows:
+            pp_row = ws.max_row + 3
+            ws.cell(pp_row, 1,
+                f"Per-Property Full Year {proj_yr} Projection Summary "
+                f"(see \"Property Projections\" tab for full detail)"
+            ).font = BOLD_FONT
+            pp_row += 1
+            _write_property_projection_summary(ws, prop_proj_rows, pp_row, proj_yr)
 
     # ── Recently Stabilised / New Properties ─────────────────────────────────
     partial_kpis = [k for k in kpis if k.is_partial_year and not k.is_carveout]
@@ -783,6 +800,99 @@ def _aggregate(kpis: list[PropertyPeriodKPIs]) -> dict:
         leakage_gap=(phys_occ - eco_occ) if (phys_occ is not None and eco_occ is not None) else None,
         income_per_unit=income_pu, expense_per_unit=expense_pu, noi_per_unit=noi_pu,
     )
+
+
+# ─── Per-property full-year projection ───────────────────────────────────────
+
+_PROJ_KEYS = [
+    ("actual_income",   "budget_income",   "income"),
+    ("actual_expenses", "budget_expenses", "expenses"),
+    ("actual_noi",      "budget_noi",      "noi"),
+]
+
+
+def _compute_property_projections(kpis: list, proj_yr: int) -> list[dict]:
+    """
+    Compute full-year projections for every non-carveout, non-partial-year
+    property in *proj_yr*.  Returns a list of row-dicts, sorted by NOI
+    variance to plan descending (best first, None last).
+
+    Formula:
+        Projected FY  = Q1 Actual + Q2–Q4 Budget
+        FY Budget     = Full-year budget (months 1-12) if available;
+                        otherwise Q1 Budget × 4
+        If Q2-Q4 Budget is absent, falls back to Q1 Budget × 3 for Q2-Q4
+        and Q1 Budget × 4 for FY Budget.
+    """
+    if not proj_yr:
+        return []
+
+    props = sorted({k.property_name for k in kpis
+                    if not k.is_carveout and not k.is_partial_year})
+    result = []
+
+    for prop in props:
+        prop_kpis = [k for k in kpis if k.property_name == prop]
+        q1k   = [k for k in prop_kpis if k.year == proj_yr and k.month in (1, 2, 3)]
+        q2q4k = [k for k in prop_kpis if k.year == proj_yr and k.month in range(4, 13)]
+        ayk   = [k for k in prop_kpis if k.year == proj_yr]
+
+        if not q1k:
+            continue
+
+        q1a   = _aggregate(q1k)
+        q2q4a = _aggregate(q2q4k) if q2q4k else {}
+        aya   = _aggregate(ayk)   if ayk   else {}
+
+        pm           = q1k[0].pm_name
+        city         = q1k[0].city
+        tenancy_type = q1k[0].tenancy_type
+        total_units  = q1k[0].total_units  # per-property units (not summed across months)
+
+        row_d: dict = {
+            "property_name":      prop,
+            "pm_name":            pm,
+            "city":               city,
+            "tenancy_type":       tenancy_type,
+            "total_units":        total_units,
+            "q1_actual_income":   q1a.get("actual_income"),
+            "q1_actual_expenses": q1a.get("actual_expenses"),
+            "q1_actual_noi":      q1a.get("actual_noi"),
+        }
+
+        for pk, bk, short in _PROJ_KEYS:
+            q1_act   = q1a.get(pk)
+            q2q4_bud = q2q4a.get(bk)
+            ay_bud   = aya.get(bk)
+
+            if not q2q4_bud:
+                q1_bud   = q1a.get(bk)
+                q2q4_bud = (q1_bud * 3) if q1_bud is not None else None
+                fy_bud   = (q1_bud * 4) if q1_bud is not None else None
+            else:
+                fy_bud = ay_bud
+
+            proj_fy = (q1_act + q2q4_bud) if (q1_act is not None and q2q4_bud is not None) else None
+            var     = (proj_fy - fy_bud)   if (proj_fy is not None and fy_bud is not None) else None
+            var_pct = (var / abs(fy_bud))  if (var is not None and fy_bud) else None
+
+            row_d[f"q2q4_budget_{short}"] = q2q4_bud
+            row_d[f"proj_fy_{short}"]     = proj_fy
+            row_d[f"fy_budget_{short}"]   = fy_bud
+            row_d[f"var_{short}"]         = var
+            if short == "noi":
+                row_d["var_noi_pct"] = var_pct
+
+        # Annualized projected NOI/unit
+        p_noi = row_d.get("proj_fy_noi")
+        row_d["proj_noi_per_unit_annual"] = (
+            p_noi / total_units if (p_noi is not None and total_units) else None
+        )
+        result.append(row_d)
+
+    # Sort: positive variance first, then None, then negative
+    result.sort(key=lambda r: (r.get("var_noi") is None, -(r.get("var_noi") or 0)))
+    return result
 
 
 # ─── Dashboard section helpers ────────────────────────────────────────────────
@@ -1223,6 +1333,68 @@ def _apply_property_variance_fills(ws, row, headers, agg):
                                 threshold=0.05)
 
 
+def _write_property_projection_summary(ws, prop_proj: list, start_row: int,
+                                       proj_yr: int) -> int:
+    """
+    Write a compact per-property projection summary on the Dashboard tab.
+    Returns the next available row after the table.
+    Columns: Property | PM | City | Q1 Actual NOI | Projected FY NOI |
+             FY Budget NOI | NOI Var to Plan | NOI Var % |
+             Projected FY Income | Projected FY Expenses
+    """
+    _PROJ_SUM_FILL = PatternFill("solid", fgColor="5B9BD5")   # lighter blue
+    _PROJ_SUM_FONT = Font(bold=True, color="FFFFFF", size=10)
+
+    headers = [
+        "Property", "PM", "City",
+        f"Q1 {proj_yr} Actual NOI",
+        f"Projected FY {proj_yr} NOI",
+        f"FY {proj_yr} Budget NOI",
+        "NOI Var to Plan",
+        "NOI Var %",
+        f"Projected FY {proj_yr} Income",
+        f"Projected FY {proj_yr} Expenses",
+    ]
+    hdr_row = start_row
+    for ci, h in enumerate(headers, 1):
+        cell = ws.cell(hdr_row, ci, h)
+        cell.fill = _PROJ_SUM_FILL
+        cell.font = _PROJ_SUM_FONT
+        cell.alignment = Alignment(horizontal="center", wrap_text=True)
+    ws.row_dimensions[hdr_row].height = 30
+    row = hdr_row + 1
+
+    for data_idx, p in enumerate(prop_proj):
+        row_fill = _ICE_BLUE_FILL if data_idx % 2 == 0 else _WHITE_FILL
+        for ci in range(1, len(headers) + 1):
+            ws.cell(row, ci).fill = row_fill
+
+        ws.cell(row, 1, p["property_name"])
+        ws.cell(row, 2, p["pm_name"])
+        ws.cell(row, 3, p["city"])
+        _c(ws, row, 4,  p.get("q1_actual_noi"),      CURRENCY_FMT)
+        _c(ws, row, 5,  p.get("proj_fy_noi"),         CURRENCY_FMT)
+        _c(ws, row, 6,  p.get("fy_budget_noi"),       CURRENCY_FMT)
+        _c(ws, row, 7,  p.get("var_noi"),             CURRENCY_FMT)
+        _c(ws, row, 8,  p.get("var_noi_pct"),         VAR_PCT_FMT)
+        _c(ws, row, 9,  p.get("proj_fy_income"),      CURRENCY_FMT)
+        _c(ws, row, 10, p.get("proj_fy_expenses"),    CURRENCY_FMT)
+
+        if p.get("var_noi") is not None:
+            apply_variance_fill(ws.cell(row, 7), p["var_noi"],
+                                favorable_is_positive=True)
+        if p.get("var_noi_pct") is not None:
+            apply_variance_fill(ws.cell(row, 8), p["var_noi_pct"],
+                                favorable_is_positive=True, threshold=0.05)
+        row += 1
+
+    if row == hdr_row + 1:
+        ws.cell(row, 1, f"No properties with Q1 {proj_yr} data available.")
+        row += 1
+
+    return row
+
+
 def _build_ar_aging(wb, ar_rows: list, portfolio_name: str, kpis=None) -> None:
     """4-block AR Aging tab: portfolio summaries (TR + Sub) + property analysis (TR + Sub)."""
     ws = wb.create_sheet("AR Aging")
@@ -1460,6 +1632,154 @@ def _build_ar_aging(wb, ar_rows: list, portfolio_name: str, kpis=None) -> None:
         row += 2  # blank rows between blocks
 
     # No freeze_panes on AR Aging tab — each block starts at a different row
+    _autofit_columns(ws)
+
+
+def _build_property_projections(wb, kpis, portfolio_name, proj_yr) -> None:
+    """
+    New tab: Per-Property Full Year {proj_yr} Projections.
+
+    Columns:
+        Identity  (5): Property | PM | City | Tenancy Type | Total Units
+        Q1 Actuals(3): Q1 Actual Income | Expenses | NOI
+        Q2-Q4 Bud (3): Q2-Q4 Bud Income | Expenses | NOI
+        Income Proj(3): Proj FY Income | FY Bud Income | Income Var to Plan
+        Exp Proj  (3): Proj FY Expenses | FY Bud Expenses | Expense Var to Plan
+        NOI Proj  (4): Proj FY NOI | FY Bud NOI | NOI Var to Plan | NOI Var %
+        Per Unit  (1): Projected Annualized NOI/Unit
+    """
+    ws = wb.create_sheet("Property Projections")
+
+    if not proj_yr:
+        ws.cell(1, 1, "No projection year available — no data loaded.").font = BOLD_FONT
+        return
+
+    prop_proj = _compute_property_projections(kpis, proj_yr)
+
+    # Title
+    ws.cell(1, 1, f"{portfolio_name} — Per-Property Full Year {proj_yr} Projections").font = BOLD_FONT
+    note_cell = ws.cell(2, 1,
+        f"Projected Full Year {proj_yr} = Q1 {proj_yr} Actual + Q2–Q4 {proj_yr} Budget. "
+        f"Falls back to Q1 Budget × 3 for Q2–Q4 (and × 4 for FY Budget) when full-year "
+        f"budget is not loaded."
+    )
+    note_cell.font = Font(italic=True, size=9, color="666666")
+
+    # Header colour scheme
+    _IDENTITY_FILL  = PatternFill("solid", fgColor="1F4E79")   # dark navy
+    _Q1_FILL        = PatternFill("solid", fgColor="2E75B6")   # mid-blue
+    _Q2Q4_FILL      = PatternFill("solid", fgColor="7F7F7F")   # grey
+    _PROJ_FILL      = PatternFill("solid", fgColor="5B9BD5")   # light blue
+    _HDR_FONT       = Font(bold=True, color="FFFFFF", size=10)
+
+    headers = [
+        # Identity
+        "Property", "PM", "City", "Tenancy Type", "Total Units",
+        # Q1 actuals
+        f"Q1 {proj_yr} Actual Income",
+        f"Q1 {proj_yr} Actual Expenses",
+        f"Q1 {proj_yr} Actual NOI",
+        # Q2-Q4 budget components
+        f"Q2–Q4 {proj_yr} Budget Income",
+        f"Q2–Q4 {proj_yr} Budget Expenses",
+        f"Q2–Q4 {proj_yr} Budget NOI",
+        # Income projection
+        f"Projected FY {proj_yr} Income",
+        f"FY {proj_yr} Budget Income",
+        f"Income Var to Plan",
+        # Expense projection
+        f"Projected FY {proj_yr} Expenses",
+        f"FY {proj_yr} Budget Expenses",
+        f"Expense Var to Plan",
+        # NOI projection
+        f"Projected FY {proj_yr} NOI",
+        f"FY {proj_yr} Budget NOI",
+        f"NOI Var to Plan",
+        f"NOI Var %",
+        # Per-unit
+        f"Projected Annual NOI/Unit",
+    ]
+
+    HDR_ROW = 4
+    for ci, hdr in enumerate(headers, 1):
+        cell = ws.cell(HDR_ROW, ci, hdr)
+        cell.alignment = Alignment(horizontal="center", wrap_text=True)
+        if   ci <= 5:         cell.fill = _IDENTITY_FILL
+        elif ci <= 8:         cell.fill = _Q1_FILL
+        elif ci <= 11:        cell.fill = _Q2Q4_FILL
+        else:                 cell.fill = _PROJ_FILL
+        cell.font = _HDR_FONT
+    ws.row_dimensions[HDR_ROW].height = 32
+
+    row = HDR_ROW + 1
+    for data_idx, p in enumerate(prop_proj):
+        row_fill = _ICE_BLUE_FILL if data_idx % 2 == 0 else _WHITE_FILL
+        for ci in range(1, len(headers) + 1):
+            ws.cell(row, ci).fill = row_fill
+
+        ws.cell(row, 1, p["property_name"])
+        ws.cell(row, 2, p["pm_name"])
+        ws.cell(row, 3, p["city"])
+        ws.cell(row, 4, p["tenancy_type"])
+        ws.cell(row, 5, p.get("total_units") or "N/A")
+
+        # Q1 actuals
+        _c(ws, row, 6,  p.get("q1_actual_income"),   CURRENCY_FMT)
+        _c(ws, row, 7,  p.get("q1_actual_expenses"),  CURRENCY_FMT)
+        _c(ws, row, 8,  p.get("q1_actual_noi"),       CURRENCY_FMT)
+
+        # Q2-Q4 budget
+        _c(ws, row, 9,  p.get("q2q4_budget_income"),  CURRENCY_FMT)
+        _c(ws, row, 10, p.get("q2q4_budget_expenses"), CURRENCY_FMT)
+        _c(ws, row, 11, p.get("q2q4_budget_noi"),     CURRENCY_FMT)
+
+        # Income projection
+        _c(ws, row, 12, p.get("proj_fy_income"),      CURRENCY_FMT)
+        _c(ws, row, 13, p.get("fy_budget_income"),    CURRENCY_FMT)
+        _c(ws, row, 14, p.get("var_income"),          CURRENCY_FMT)
+        if p.get("var_income") is not None:
+            apply_variance_fill(ws.cell(row, 14), p["var_income"], favorable_is_positive=True)
+
+        # Expense projection
+        _c(ws, row, 15, p.get("proj_fy_expenses"),    CURRENCY_FMT)
+        _c(ws, row, 16, p.get("fy_budget_expenses"),  CURRENCY_FMT)
+        _c(ws, row, 17, p.get("var_expenses"),        CURRENCY_FMT)
+        if p.get("var_expenses") is not None:
+            apply_variance_fill(ws.cell(row, 17), p["var_expenses"], favorable_is_positive=False)
+
+        # NOI projection
+        _c(ws, row, 18, p.get("proj_fy_noi"),         CURRENCY_FMT)
+        _c(ws, row, 19, p.get("fy_budget_noi"),       CURRENCY_FMT)
+        _c(ws, row, 20, p.get("var_noi"),             CURRENCY_FMT)
+        _c(ws, row, 21, p.get("var_noi_pct"),         VAR_PCT_FMT)
+        if p.get("var_noi") is not None:
+            apply_variance_fill(ws.cell(row, 20), p["var_noi"], favorable_is_positive=True)
+        if p.get("var_noi_pct") is not None:
+            apply_variance_fill(ws.cell(row, 21), p["var_noi_pct"],
+                                favorable_is_positive=True, threshold=0.05)
+
+        # Per-unit
+        _c(ws, row, 22, p.get("proj_noi_per_unit_annual"), CURRENCY_FMT)
+        row += 1
+
+    # Excel Table
+    last_data_row = row - 1
+    if last_data_row >= HDR_ROW:
+        try:
+            tab = Table(
+                displayName="PropertyProjectionsTable",
+                ref=f"A{HDR_ROW}:{get_column_letter(len(headers))}{last_data_row}",
+            )
+            tab.tableStyleInfo = TableStyleInfo(
+                name="TableStyleMedium2",
+                showFirstColumn=False, showLastColumn=False,
+                showRowStripes=False, showColumnStripes=False,
+            )
+            ws.add_table(tab)
+        except Exception:
+            pass  # Don't fail the entire export if the table name conflicts
+
+    ws.freeze_panes = "F5"
     _autofit_columns(ws)
 
 

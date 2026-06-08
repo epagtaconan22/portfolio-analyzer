@@ -189,6 +189,13 @@ body {
 .pos { color: #059669; font-weight: 500; }
 .neg { color: #dc2626; font-weight: 500; }
 
+/* Property detail projection table */
+.projection-table td.proj-highlight {
+  background: #EBF4FF;
+  font-weight: 600;
+  color: #1a3a5c;
+}
+
 /* Transposed KPI summary table */
 .kpi-transposed .kpi-label-col {
   min-width: 170px;

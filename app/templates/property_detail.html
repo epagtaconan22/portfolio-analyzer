@@ -57,6 +57,60 @@
   </div>
 </section>
 
+<!-- Full Year Projection -->
+{% if prop_projection and proj_yr_label %}
+<section class="card">
+  <h2>Full Year {{ proj_yr_label }} Projection</h2>
+  <p class="hint" style="margin-bottom:12px;">
+    Projected Full Year = Q1 {{ proj_yr_label }} Actual + Q2–Q4 {{ proj_yr_label }} Budget
+    (falls back to Q1 Budget &times; 3 for Q2–Q4 if full-year budget not loaded).
+  </p>
+  <div class="table-scroll">
+  <table class="data-table projection-table">
+    <thead>
+      <tr>
+        <th>Metric</th>
+        <th title="Q1 actual amounts from uploaded financials (Jan–Mar {{ proj_yr_label }})">Q1 {{ proj_yr_label }} Actual</th>
+        <th title="Q1 Actual + Q2–Q4 Budget">Projected Full Year {{ proj_yr_label }}</th>
+        <th title="Full year budgeted amount">FY {{ proj_yr_label }} Budget</th>
+        <th title="Projected Full Year − FY Budget">Variance to Plan</th>
+        <th title="Variance to Plan ÷ |FY Budget|">Var %</th>
+      </tr>
+    </thead>
+    <tbody>
+      {%- set rows_def = [
+          ("Income",   "actual_income",   True),
+          ("Expenses", "actual_expenses", False),
+          ("NOI",      "actual_noi",      True)
+      ] -%}
+      {%- for label, key, fav_pos in rows_def -%}
+      {%- set pd = prop_projection.get(key, {}) -%}
+      {%- set var     = pd.get('var_to_plan') -%}
+      {%- set var_pct = pd.get('var_to_plan_pct') -%}
+      {%- if var is not none -%}
+        {%- if fav_pos -%}
+          {%- set var_cls = 'pos' if var >= 0 else 'neg' -%}
+        {%- else -%}
+          {%- set var_cls = 'neg' if var >= 0 else 'pos' -%}
+        {%- endif -%}
+      {%- else -%}
+        {%- set var_cls = '' -%}
+      {%- endif -%}
+      <tr>
+        <td><strong>{{ label }}</strong></td>
+        <td class="currency">{{ pd.get('q1_actual') | currency }}</td>
+        <td class="currency proj-highlight">{{ pd.get('proj_fy') | currency }}</td>
+        <td class="currency">{{ pd.get('fy_budget') | currency }}</td>
+        <td class="currency {{ var_cls }}">{{ var | currency }}</td>
+        <td class="pct {{ var_cls }}">{{ var_pct | pct }}</td>
+      </tr>
+      {%- endfor -%}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
 <!-- AR Aging Detail -->
 {% for rtype in ["Tenant Rent", "Subsidy"] %}
 {% if ar_by_type[rtype] is defined and ar_by_type[rtype] %}
