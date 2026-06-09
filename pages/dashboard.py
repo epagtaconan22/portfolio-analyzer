@@ -1,18 +1,16 @@
 """Dashboard page — portfolio KPI summary, property table, AR aging, NOI rankings."""
 import io
+import os
 import zipfile
 import streamlit as st
 import pandas as pd
 
 from app.storage.runs import load_run, list_runs
 from app.ui.formatting import fmt_currency, fmt_pct
-from app.ui.aggregation import (agg_kpis, agg_ar, agg_ar_for_prop,
-                                  ar_yoy_delta, pct_delta,
+from app.ui.aggregation import (agg_kpis, agg_ar,
                                   month_to_quarter, quarter_label, quarter_months,
                                   ar_period_label)
-from app.ui.kpi_definitions import (SUMMARY_KPI_DEFINITIONS, KPI_TOOLTIPS,
-                                     BUDGET_YOY_KEY, YOY_CURRENCY_KEYS,
-                                     YOY_FAVORABLE_IF_POSITIVE, PCT_VARIANCE_THRESHOLD_KEYS)
+from app.ui.kpi_definitions import SUMMARY_KPI_DEFINITIONS
 from config import ECO_OCC_TARGET
 
 
@@ -55,15 +53,15 @@ with col_title:
     st.caption(f"{num_props} Properties  ·  {', '.join(str(y) for y in years)}")
 with col_dl:
     # Build download ZIP in memory
-    run_dir   = __import__("os").path.join("runs", run_id)
-    main_wb   = __import__("os").path.join(run_dir, meta.get("main_workbook", ""))
-    backup_wb = __import__("os").path.join(run_dir, meta.get("backup_workbook", ""))
+    run_dir   = os.path.join("runs", run_id)
+    main_wb   = os.path.join(run_dir, meta.get("main_workbook", ""))
+    backup_wb = os.path.join(run_dir, meta.get("backup_workbook", ""))
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        if __import__("os").path.isfile(main_wb):
-            zf.write(main_wb, __import__("os").path.basename(main_wb))
-        if __import__("os").path.isfile(backup_wb):
-            zf.write(backup_wb, __import__("os").path.basename(backup_wb))
+        if os.path.isfile(main_wb):
+            zf.write(main_wb, os.path.basename(main_wb))
+        if os.path.isfile(backup_wb):
+            zf.write(backup_wb, os.path.basename(backup_wb))
     buf.seek(0)
     st.download_button(
         "⬇ Download Workbooks (.zip)",
