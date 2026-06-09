@@ -1,6 +1,5 @@
-flask>=3.0
+streamlit>=1.36
 openpyxl>=3.1
 pandas>=2.0
 xlrd>=2.0
 pytest>=8.0
-pytest-flask>=1.3
