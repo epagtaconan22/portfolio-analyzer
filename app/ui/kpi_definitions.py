@@ -13,7 +13,7 @@ KPI_TOOLTIPS: dict[str, str] = {
     "Actual NOI":         "NOI = Total Income − Total Operating Expenses",
     "Budget NOI":         "Budget NOI = Budget Income − Budget Expenses",
     "NOI Variance":       "NOI Variance = Actual NOI − Budget NOI. Positive = favorable",
-    "NOI Variance %":     "NOI Variance / |Budget NOI|. Absolute denominator handles sign flips",
+    "NOI Variance %":     "NOI Variance / |Budget NOI|. Absolute denominator handles sign flips when budget NOI is negative",
     "GPR":                "Gross Potential Rent — total scheduled rent before any deductions",
     "Vacancy":            "Vacancy loss — rent foregone from unoccupied units",
     "Concessions":        "Move-in specials and rent concessions",
@@ -22,11 +22,11 @@ KPI_TOOLTIPS: dict[str, str] = {
     "Eco Occ %":          "Economic Occupancy % = Net Collectible / GPR",
     "Budget Eco Occ %":   "Budget Economic Occupancy % = Budget Net Collectible / Budget GPR",
     "Eco Occ Variance":   "Actual Eco Occ % − Budget Eco Occ %",
-    "Physical Occ %":     "Physical Occ % = Occupied Units / Total Units",
-    "Leakage Gap":        "Physical Occ % − Economic Occ %. Positive = units occupied but rent not fully collected",
+    "Physical Occ %":     "Physical Occ % = Occupied Units / Total Units. Sourced from Physical Occupancy Report",
+    "Leakage Gap":        "Physical Occ % − Economic Occ %. Positive = units occupied but rent not being fully collected",
     "Income/Unit":        "Actual Income / Total Units (from Physical Occupancy Report)",
-    "Expense/Unit":       "Actual Expenses / Total Units",
-    "NOI/Unit":           "Actual NOI / Total Units",
+    "Expense/Unit":       "Actual Expenses / Total Units (from Physical Occupancy Report)",
+    "NOI/Unit":           "Actual NOI / Total Units (from Physical Occupancy Report)",
 }
 
 # (label, key, fmt, favorable_positive, group_id, is_group_header)
