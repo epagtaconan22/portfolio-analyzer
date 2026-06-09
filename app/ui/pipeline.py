@@ -2,11 +2,11 @@
 
 Accepts file bytes instead of Flask request.files objects. Returns run_id.
 """
-import io
 import csv
 import os
 import re
 import tempfile
+from collections import defaultdict
 from datetime import datetime
 
 from app.parser.financial import parse_financial_workbooks
@@ -25,13 +25,6 @@ from config import (QUARTERS, PROPERTY_NAME_MAP, MONTHS,
                     PERMANENT_EXCLUSIONS, PROPERTY_METADATA, PROPERTY_PM_EXCLUSIONS)
 
 
-def _safe_filename(name: str) -> str:
-    """Sanitize a filename (replaces werkzeug.utils.secure_filename)."""
-    name = os.path.basename(name)
-    name = re.sub(r"[^\w\s\-.]", "", name).strip()
-    return name or "upload"
-
-
 def _save_bytes_to_temp(filename: str, data: bytes) -> str:
     """Write bytes to a NamedTemporaryFile and return the path."""
     suffix = os.path.splitext(filename)[1] or ".xlsx"
@@ -43,7 +36,6 @@ def _save_bytes_to_temp(filename: str, data: bytes) -> str:
 
 def _detect_partial_year(kpis) -> set[str]:
     """Auto-detect properties with fewer months than the max in their year."""
-    from collections import defaultdict
     months_by: dict = defaultdict(lambda: defaultdict(set))
     for k in kpis:
         if not k.is_carveout:
@@ -108,12 +100,14 @@ def run_analysis_pipeline(
     if not saved_paths:
         raise ValueError("No valid .xlsx files were provided.")
 
-    # ── Save occupancy and AR files ───────────────────────────────────────────
-    occ_paths = [_save_bytes_to_temp(fn, d) for fn, d in occ_files if fn]
-    ar_paths  = [_save_bytes_to_temp(fn, d) for fn, d in ar_files  if fn]
-
+    occ_paths: list[str] = []
+    ar_paths:  list[str] = []
     try:
-        # ── Parse ──────────────────────────────────────────────────────────────
+        # ── Save occupancy and AR files ───────────────────────────────────────
+        occ_paths = [_save_bytes_to_temp(fn, d) for fn, d in occ_files if fn]
+        ar_paths  = [_save_bytes_to_temp(fn, d) for fn, d in ar_files  if fn]
+
+        # ── Parse ────────────────────────────────────────────────────────────
         raw_rows, source_index = parse_financial_workbooks(saved_paths, pm_name_map)
 
         for _row in raw_rows:
