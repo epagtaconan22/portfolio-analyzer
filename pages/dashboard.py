@@ -145,7 +145,7 @@ def _build_kpi_df(period_labels, period_aggs):
             val = period_aggs.get(lbl, {}).get(key)
             row[lbl] = fmt_currency(val) if fmt == "currency" else fmt_pct(val)
         rows.append(row)
-    return pd.DataFrame(rows).set_index("KPI")
+    return pd.DataFrame(rows)
 
 
 def _color_variance_col(col_series, favorable_positive):
@@ -197,7 +197,7 @@ if period_labels:
 
     # Bold group header rows
     def _style_row(row):
-        label_clean = row.name.strip()
+        label_clean = str(row["KPI"]).strip()
         if label_clean.startswith("▶"):
             return ["font-weight: bold; background-color: #DEEAF1"] * len(row)
         if not label_clean:
@@ -205,7 +205,7 @@ if period_labels:
         return [""] * len(row)
 
     styled = kpi_df.style.apply(_style_row, axis=1)
-    st.dataframe(styled, use_container_width=True, height=600)
+    st.dataframe(styled, use_container_width=True, height=600, hide_index=True)
 else:
     st.info("No period data available.")
 
