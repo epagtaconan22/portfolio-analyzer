@@ -94,8 +94,18 @@ def run_analysis_pipeline(
             continue
         path = _save_bytes_to_temp(fname, data)
         saved_paths.append(path)
-        if i < len(pm_names):
+        if i < len(pm_names) and pm_names[i]:
             pm_name_map[os.path.basename(path)] = pm_names[i]
+        else:
+            # Always populate map using the ORIGINAL filename so that
+            # parse_financial_workbooks never falls back to the random temp
+            # basename (e.g. "tmpdjgxy2xg") for PM name inference.
+            pm_name_map[os.path.basename(path)] = (
+                os.path.splitext(fname)[0]
+                .replace("_", " ")
+                .replace("-", " ")
+                .strip()
+            )
 
     if not saved_paths:
         raise ValueError("No valid .xlsx files were provided.")
@@ -105,7 +115,19 @@ def run_analysis_pipeline(
     try:
         # ── Save occupancy and AR files ───────────────────────────────────────
         occ_paths = [_save_bytes_to_temp(fn, d) for fn, d in occ_files if fn]
-        ar_paths  = [_save_bytes_to_temp(fn, d) for fn, d in ar_files  if fn]
+
+        # Build AR paths AND a map of temp_path → original_filename so the
+        # AR aging parser can extract PM name + receivable type from the real
+        # filename (e.g. "Solari_AR Aging_Subsidy_03_2026.xlsx") rather than
+        # from the random temp basename (e.g. "tmpabcde123.xlsx").
+        ar_paths: list[str] = []
+        ar_original_names: dict[str, str] = {}
+        for fn, d in ar_files:
+            if not fn:
+                continue
+            path = _save_bytes_to_temp(fn, d)
+            ar_paths.append(path)
+            ar_original_names[path] = fn
 
         # ── Parse ────────────────────────────────────────────────────────────
         raw_rows, source_index = parse_financial_workbooks(saved_paths, pm_name_map)
@@ -132,7 +154,7 @@ def run_analysis_pipeline(
 
         ar_rows = []
         if ar_paths:
-            rows = parse_ar_aging_reports(ar_paths)
+            rows = parse_ar_aging_reports(ar_paths, original_names=ar_original_names)
             for r in rows:
                 r.property_name = PROPERTY_NAME_MAP.get(r.property_name, r.property_name)
             ar_rows.extend(rows)

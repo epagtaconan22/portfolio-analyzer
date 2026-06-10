@@ -48,17 +48,32 @@ _TYPE_NORMALIZE: dict[str, str] = {
 }
 
 
-def parse_ar_aging_reports(file_paths: list[str]) -> list[ARAgingRow]:
-    """Parse one or more AR Aging files. Returns combined list of ARAgingRow."""
+def parse_ar_aging_reports(
+    file_paths: list[str],
+    original_names: dict[str, str] | None = None,
+) -> list[ARAgingRow]:
+    """Parse one or more AR Aging files. Returns combined list of ARAgingRow.
+
+    Args:
+        file_paths: Paths to the (possibly temp) files to parse.
+        original_names: Optional mapping of temp_path → original filename.
+            When provided, each file's metadata (PM name, receivable type,
+            year, month) is inferred from its original name rather than the
+            temp basename (which would be something like 'tmpabcde123.xlsx').
+    """
     results: list[ARAgingRow] = []
     for path in file_paths:
-        results.extend(_parse_one(path))
+        orig = (original_names or {}).get(path)
+        results.extend(_parse_one(path, original_fname=orig))
     return results
 
 
-def _parse_one(path: str) -> list[ARAgingRow]:
-    fname = os.path.basename(path)
-    stem  = os.path.splitext(fname)[0]
+def _parse_one(path: str, original_fname: str | None = None) -> list[ARAgingRow]:
+    # Use the original filename (if provided) so that _parse_filename can
+    # extract PM name, receivable type, year, and month from the real name
+    # rather than from a random temp basename like 'tmpabcde123'.
+    fname = original_fname if original_fname else os.path.basename(path)
+    stem  = os.path.splitext(os.path.basename(fname))[0]
     pm_name, receivable_type, year, month = _parse_filename(stem)
 
     wb  = load_workbook_any_format(path)
