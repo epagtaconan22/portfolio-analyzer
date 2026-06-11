@@ -254,6 +254,12 @@ def run_analysis_pipeline(
 
         years         = sorted({k.year for k in kpis})
         props         = sorted({k.property_name for k in kpis})
+        # Properties that contribute to portfolio-level aggregations: carveout
+        # and partial-year properties are excluded from portfolio totals, so
+        # the "Portfolio Summary — X Properties" header should reflect only this
+        # subset (matching the count used in main_workbook.py line 186).
+        portfolio_props = sorted({k.property_name for k in kpis
+                                   if not k.is_carveout and not k.is_partial_year})
         pm_names_used = sorted({k.pm_name for k in kpis})
 
         ar_tr_periods  = sorted({(r.year, r.month) for r in ar_rows
@@ -268,7 +274,7 @@ def run_analysis_pipeline(
             "use_budget_eco_occ": use_budget_eco_occ,
             "years": years,
             "properties": props,
-            "num_properties": len(props),
+            "num_properties": len(portfolio_props),
             "pm_names": pm_names_used,
             "source_files": [os.path.basename(p) for p in saved_paths],
             "excluded_properties":     sorted(excluded - PERMANENT_EXCLUSIONS),
