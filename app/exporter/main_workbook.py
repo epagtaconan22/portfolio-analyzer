@@ -1492,7 +1492,10 @@ def _build_ar_aging(wb, ar_rows: list, portfolio_name: str, kpis=None) -> None:
         if not rtype_rows:
             continue
 
-        prop_count = len({r.property_name for r in rtype_rows})
+        # Count only properties present in the LATEST period so the header
+        # matches the number of rows shown in the property detail table below.
+        prop_count = len({r.property_name for r in rtype_rows
+                          if r.year == latest_yr and r.month == latest_mo})
         header_text = (
             f"{portfolio_name} — Portfolio AR Summary — {rtype} "
             f"({prop_count} Propert{'y' if prop_count == 1 else 'ies'})"

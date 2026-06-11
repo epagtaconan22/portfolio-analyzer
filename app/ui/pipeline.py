@@ -34,6 +34,33 @@ def _save_bytes_to_temp(filename: str, data: bytes) -> str:
     return path
 
 
+def _clean_pm_name(filename: str) -> str:
+    """Extract a short PM company name from a financial report filename.
+
+    Strips common boilerplate suffixes such as '12 month actual budget 2026',
+    'full year actual 2026', etc. so that the PM column shows a concise name
+    instead of the entire filename stem.
+
+    Examples:
+        'Solari 12 month actual budget 2026.xlsx'  → 'Solari'
+        'ConAm 12 month actual budget 2026.xlsx'   → 'ConAm'
+        'VOTP JSCO 12 month actual 2026.xlsx'      → 'VOTP JSCO'
+    """
+    stem = (
+        os.path.splitext(filename)[0]
+        .replace("_", " ")
+        .replace("-", " ")
+        .strip()
+    )
+    cleaned = re.sub(
+        r'\s+(12\s+month|full[- ]year|full[- ]yr|annual|actual|budget|\d{4})\b.*$',
+        "",
+        stem,
+        flags=re.IGNORECASE,
+    ).strip()
+    return cleaned if cleaned else stem
+
+
 def _detect_partial_year(kpis) -> set[str]:
     """Auto-detect properties with fewer months than the max in their year."""
     months_by: dict = defaultdict(lambda: defaultdict(set))
@@ -97,15 +124,10 @@ def run_analysis_pipeline(
         if i < len(pm_names) and pm_names[i]:
             pm_name_map[os.path.basename(path)] = pm_names[i]
         else:
-            # Always populate map using the ORIGINAL filename so that
-            # parse_financial_workbooks never falls back to the random temp
-            # basename (e.g. "tmpdjgxy2xg") for PM name inference.
-            pm_name_map[os.path.basename(path)] = (
-                os.path.splitext(fname)[0]
-                .replace("_", " ")
-                .replace("-", " ")
-                .strip()
-            )
+            # Derive a short PM name from the original filename (e.g. "Solari"
+            # from "Solari 12 month actual budget 2026.xlsx") so the PM column
+            # shows a concise company name rather than the full filename stem.
+            pm_name_map[os.path.basename(path)] = _clean_pm_name(fname)
 
     if not saved_paths:
         raise ValueError("No valid .xlsx files were provided.")
