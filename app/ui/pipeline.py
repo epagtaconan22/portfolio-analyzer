@@ -9,7 +9,7 @@ import tempfile
 from collections import defaultdict
 from datetime import datetime
 
-from app.parser.financial import parse_financial_workbooks
+from app.parser.financial import parse_financial_workbooks, _infer_pm_from_filename
 from app.parser.occupancy import parse_occupancy_report
 from app.parser.ar_aging import parse_ar_aging_reports
 from app.mapper.account_mapper import map_rows
@@ -37,14 +37,20 @@ def _save_bytes_to_temp(filename: str, data: bytes) -> str:
 def _clean_pm_name(filename: str) -> str:
     """Extract a short PM company name from a financial report filename.
 
-    Strips common boilerplate suffixes such as '12 month actual budget 2026',
-    'full year actual 2026', etc. so that the PM column shows a concise name
-    instead of the entire filename stem.
+    Strategy (in order):
+    1. Known-PM lookup via _infer_pm_from_filename — matches any name in
+       _KNOWN_PM_NAMES against the filename (case-insensitive substring).
+       Handles cases like 'VOTP JSCO 12 month actual 2026.xlsx' → 'JSCO'
+       where the stem starts with a property abbreviation.
+    2. Regex fallback — strips common financial-report boilerplate suffixes
+       ('12 month actual budget 2026', 'full year 2025', etc.) from the
+       stem for any PM not yet in _KNOWN_PM_NAMES.
 
     Examples:
         'Solari 12 month actual budget 2026.xlsx'  → 'Solari'
         'ConAm 12 month actual budget 2026.xlsx'   → 'ConAm'
-        'VOTP JSCO 12 month actual 2026.xlsx'      → 'VOTP JSCO'
+        'VOTP JSCO 12 month actual 2026.xlsx'      → 'JSCO'
+        'SomeNewPM Full Year 2025.xlsx'            → 'SomeNewPM'
     """
     stem = (
         os.path.splitext(filename)[0]
@@ -52,6 +58,11 @@ def _clean_pm_name(filename: str) -> str:
         .replace("-", " ")
         .strip()
     )
+    # Step 1: known-PM lookup (returns the canonical name if found, else stem)
+    inferred = _infer_pm_from_filename(filename)
+    if inferred != stem:
+        return inferred
+    # Step 2: regex — strip boilerplate suffixes for unknown PM companies
     cleaned = re.sub(
         r'\s+(12\s+month|full[- ]year|full[- ]yr|annual|actual|budget|\d{4})\b.*$',
         "",
